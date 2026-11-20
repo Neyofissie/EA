@@ -191,8 +191,13 @@ const cache = new Map(); // key -> {at, data}
 async function getCandles(source, symbol, tfKey, limit=1000){
   const tf = tfOf(tfKey), key = [source, symbol, tfKey].join('|');
   const c = cache.get(key);
-  const maxAge = source==='twelvedata' ? Math.min(tf.ms/2, 600e3) : 20e3;
-  if (c && Date.now()-c.at < maxAge) return c.data;
+  // Twelve Data: with closed candles only, data can't change until the next candle closes,
+  // so reuse it until then (saves most of the free plan's 800 requests/day).
+  const nextClose = Math.floor(Date.now()/tf.ms)*tf.ms + tf.ms + 15e3;
+  const fresh = !c ? false
+    : source==='twelvedata' ? (S.p.closed ? c.at >= nextClose - tf.ms && Date.now()-c.at < 1800e3 :Date.now()-c.at < 60e3)
+    : Date.now()-c.at < 20e3;
+  if (fresh) return c.data;
   let data;
   if (source === 'binance'){
     await throttle('binance', 150);
