@@ -1,0 +1,276 @@
+//@version=6
+// ============================================================================
+//  SMC Break of Structure + Retest (trend-following) — MULTI-PAIR SCANNER
+//  Scans up to 12 symbols on a timeframe you choose and shows, per symbol:
+//  trend, HTF bias, pending BOS setups waiting for a retest, and the latest
+//  BUY/SELL retest signal with entry / SL / TP. Fires one alert per new signal.
+//  Tip: put this on a chart whose timeframe is <= the scan timeframe.
+// ============================================================================
+indicator("SMC BOS + Retest Scanner", shorttitle = "SMC Scanner", overlay = true)
+
+// ---------------- Scanner settings ----------------
+grpX = "Scanner"
+scanTf     = input.timeframe("15", "Scan timeframe", group = grpX)
+confirmed  = input.bool(true, "Use closed bars only (no repaint)", group = grpX)
+freshBars  = input.int(5, "Highlight signals newer than N bars", minval = 1, group = grpX)
+alertHtfOk = input.bool(true, "Only alert/highlight when HTF bias agrees", group = grpX)
+tblPos     = input.string("Top Right", "Table position", options = ["Top Right", "Top Left", "Bottom Right", "Bottom Left", "Middle Right"], group = grpX)
+txtSize    = input.string("Small", "Text size", options = ["Tiny", "Small", "Normal"], group = grpX)
+
+// ---------------- Strategy settings ----------------
+grpS = "Structure"
+swingLen   = input.int(5, "Swing length (pivot left/right bars)", minval = 1, group = grpS)
+grpT = "Trend filter"
+trendMode  = input.string("EMA + Structure", "Trend filter", options = ["EMA", "Structure", "EMA + Structure", "None"], group = grpT)
+emaLen     = input.int(200, "Trend EMA length", minval = 2, group = grpT)
+useHtf     = input.bool(true, "Use higher-timeframe bias", group = grpT)
+htfTf      = input.timeframe("240", "HTF timeframe", group = grpT)
+htfEmaLen  = input.int(50, "HTF EMA length", minval = 2, group = grpT)
+grpR = "Retest"
+tolAtr     = input.float(0.25, "Retest tolerance (x ATR)", minval = 0, step = 0.05, group = grpR)
+maxRetest  = input.int(20, "Max bars to wait for retest", minval = 1, group = grpR)
+needRej    = input.bool(true, "Require rejection candle", group = grpR)
+grpK = "Risk"
+slAtr      = input.float(0.5, "SL buffer (x ATR)", minval = 0, step = 0.1, group = grpK)
+rr         = input.float(2.0, "Take-profit R:R", minval = 0.1, step = 0.1, group = grpK)
+
+// ---------------- Symbols ----------------
+grpP = "Symbols (tick to enable)"
+on1  = input.bool(true,  "", inline = "s1",  group = grpP)
+s1  = input.symbol("OANDA:EURUSD", "", inline = "s1",  group = grpP)
+on2  = input.bool(true,  "", inline = "s2",  group = grpP)
+s2  = input.symbol("OANDA:GBPUSD", "", inline = "s2",  group = grpP)
+on3  = input.bool(true,  "", inline = "s3",  group = grpP)
+s3  = input.symbol("OANDA:USDJPY", "", inline = "s3",  group = grpP)
+on4  = input.bool(true,  "", inline = "s4",  group = grpP)
+s4  = input.symbol("OANDA:AUDUSD", "", inline = "s4",  group = grpP)
+on5  = input.bool(true,  "", inline = "s5",  group = grpP)
+s5  = input.symbol("OANDA:USDCAD", "", inline = "s5",  group = grpP)
+on6  = input.bool(true,  "", inline = "s6",  group = grpP)
+s6  = input.symbol("OANDA:USDCHF", "", inline = "s6",  group = grpP)
+on7  = input.bool(true,  "", inline = "s7",  group = grpP)
+s7  = input.symbol("OANDA:NZDUSD", "", inline = "s7",  group = grpP)
+on8  = input.bool(true,  "", inline = "s8",  group = grpP)
+s8  = input.symbol("OANDA:GBPJPY", "", inline = "s8",  group = grpP)
+on9  = input.bool(true,  "", inline = "s9",  group = grpP)
+s9  = input.symbol("OANDA:EURJPY", "", inline = "s9",  group = grpP)
+on10 = input.bool(true,  "", inline = "s10", group = grpP)
+s10 = input.symbol("OANDA:XAUUSD", "", inline = "s10", group = grpP)
+on11 = input.bool(true,  "", inline = "s11", group = grpP)
+s11 = input.symbol("BINANCE:BTCUSDT", "", inline = "s11", group = grpP)
+on12 = input.bool(false, "", inline = "s12", group = grpP)
+s12 = input.symbol("TVC:US30", "", inline = "s12", group = grpP)
+
+// ---------------- Core engine (same logic as the chart indicator) ----------------
+smcCore(swingLen, emaLen, trendMode, tolAtr, maxRetest, rr, slAtr, needRej, off) =>
+    atr = ta.atr(14)
+    ema = ta.ema(close, emaLen)
+    emaRising  = ema > ema[3]
+    emaFalling = ema < ema[3]
+    ph = ta.pivothigh(high, swingLen, swingLen)
+    pl = ta.pivotlow(low, swingLen, swingLen)
+
+    var float lastH    = na
+    var float prevH    = na
+    var int   lastHBar = na
+    var bool  hBroken  = true
+    var float lastL    = na
+    var float prevL    = na
+    var int   lastLBar = na
+    var bool  lBroken  = true
+
+    if not na(ph)
+        prevH    := lastH
+        lastH    := ph
+        lastHBar := bar_index - swingLen
+        hBroken  := false
+    if not na(pl)
+        prevL    := lastL
+        lastL    := pl
+        lastLBar := bar_index - swingLen
+        lBroken  := false
+
+    haveStruct = not na(prevH) and not na(prevL)
+    structUp = haveStruct and lastH > prevH and lastL > prevL
+    structDn = haveStruct and lastH < prevH and lastL < prevL
+    emaUp = close > ema and emaRising
+    emaDn = close < ema and emaFalling
+    trendUp = switch trendMode
+        "EMA"             => emaUp
+        "Structure"       => structUp
+        "EMA + Structure" => emaUp and structUp
+        => true
+    trendDn = switch trendMode
+        "EMA"             => emaDn
+        "Structure"       => structDn
+        "EMA + Structure" => emaDn and structDn
+        => true
+    int trendDir = trendUp and not trendDn ? 1 : trendDn and not trendUp ? -1 : 0
+
+    var int   state  = 0      // 1 = bull BOS waiting retest, -1 = bear BOS waiting retest
+    var float lvl    = na
+    var int   lvlBar = na
+    var int   bosBar = na
+    var int   lastSig     = 0
+    var float lastEntry   = na
+    var float lastSL      = na
+    var float lastTP      = na
+    var int   lastSigTime = na
+    var int   lastSigBar  = na
+
+    tol = atr * tolAtr
+    int   sig = 0
+    float sl  = na
+    float tp  = na
+
+    // --- manage a pending retest ---
+    if state == 1
+        if close < lvl - tol or bar_index - bosBar > maxRetest
+            state := 0
+        else if bar_index > bosBar and low <= lvl + tol and close > lvl and (not needRej or close > open)
+            sig   := 1
+            sl    := math.min(low, lvl) - slAtr * atr
+            tp    := close + rr * (close - sl)
+            state := 0
+    else if state == -1
+        if close > lvl + tol or bar_index - bosBar > maxRetest
+            state := 0
+        else if bar_index > bosBar and high >= lvl - tol and close < lvl and (not needRej or close < open)
+            sig   := -1
+            sl    := math.max(high, lvl) + slAtr * atr
+            tp    := close - rr * (sl - close)
+            state := 0
+
+    if sig != 0
+        lastSig     := sig
+        lastEntry   := close
+        lastSL      := sl
+        lastTP      := tp
+        lastSigTime := time
+        lastSigBar  := bar_index
+
+    // --- detect a new break of structure (with the trend) ---
+    int bosEvt = 0
+    if not hBroken and not na(lastH) and close > lastH
+        hBroken := true
+        if trendUp
+            bosEvt := 1
+            state  := 1
+            lvl    := lastH
+            lvlBar := lastHBar
+            bosBar := bar_index
+    if not lBroken and not na(lastL) and close < lastL
+        lBroken := true
+        if trendDn
+            bosEvt := -1
+            state  := -1
+            lvl    := lastL
+            lvlBar := lastLBar
+            bosBar := bar_index
+
+    int barsSince = na(lastSigBar) ? na : bar_index - lastSigBar
+    [state[off], trendDir[off], lvl[off], lastSig[off], lastEntry[off], lastSL[off], lastTP[off], lastSigTime[off], barsSince[off], close[off]]
+
+// ---------------- Requests ----------------
+off = confirmed ? 1 : 0
+htfBiasFn() =>
+    b = close > ta.ema(close, htfEmaLen) ? 1 : -1
+    b[1]
+
+scan(sym) =>
+    [st, tr, lvl, ls, le, lsl, ltp, lst, bs, px] = request.security(sym, scanTf, smcCore(swingLen, emaLen, trendMode, tolAtr, maxRetest, rr, slAtr, needRej, off), lookahead = confirmed ? barmerge.lookahead_on : barmerge.lookahead_off)
+    int htfRaw = request.security(sym, htfTf, htfBiasFn(), lookahead = barmerge.lookahead_on)
+    int htf = useHtf ? htfRaw : 0
+    [st, tr, lvl, ls, le, lsl, ltp, lst, bs, px, htf]
+
+// ---------------- Helpers ----------------
+shortName(sym) =>
+    parts = str.split(sym, ":")
+    array.get(parts, array.size(parts) - 1)
+fmt(v) =>
+    na(v) ? "-" : str.tostring(v, math.abs(v) >= 1000 ? "#.##" : math.abs(v) >= 20 ? "#.###" : "#.#####")
+htfOk(sig, htf) => not useHtf or not alertHtfOk or sig == htf
+tsz = txtSize == "Tiny" ? size.tiny : txtSize == "Normal" ? size.normal : size.small
+pos = switch tblPos
+    "Top Left"     => position.top_left
+    "Bottom Right" => position.bottom_right
+    "Bottom Left"  => position.bottom_left
+    "Middle Right" => position.middle_right
+    => position.top_right
+
+var table t = table.new(pos, 8, 14, bgcolor = color.new(#131722, 5), border_color = color.new(color.gray, 70), border_width = 1, frame_color = color.gray, frame_width = 1)
+
+cell(c, r, txt, bg, fg) =>
+    table.cell(t, c, r, txt, bgcolor = bg, text_color = fg, text_size = tsz)
+
+dirTxt(d) => d == 1 ? "UP" : d == -1 ? "DOWN" : "-"
+dirCol(d) => d == 1 ? color.new(color.teal, 30) : d == -1 ? color.new(color.maroon, 30) : color.new(color.gray, 80)
+
+row(r, on, sym, st, tr, lvl, ls, le, lsl, ltp, bs, px, htf) =>
+    if on
+        fresh = ls != 0 and not na(bs) and bs <= freshBars and htfOk(ls, htf)
+        status = st == 1 ? "Bull BOS: wait retest " + fmt(lvl) : st == -1 ? "Bear BOS: wait retest " + fmt(lvl) : fresh ? (ls == 1 ? "BUY" : "SELL") + " (" + str.tostring(bs) + " bars ago)" : "-"
+        stBg = fresh ? (ls == 1 ? color.new(color.lime, 20) : color.new(color.red, 20)) : st != 0 ? color.new(color.orange, 50) : color.new(color.gray, 90)
+        cell(0, r, shortName(sym), color.new(color.gray, 85), color.white)
+        cell(1, r, fmt(px), color.new(color.gray, 90), color.white)
+        cell(2, r, dirTxt(tr), dirCol(tr), color.white)
+        cell(3, r, useHtf ? dirTxt(htf) : "off", useHtf ? dirCol(htf) : color.new(color.gray, 90), color.white)
+        cell(4, r, status, stBg, color.white)
+        cell(5, r, ls == 0 ? "-" : fmt(le), color.new(color.gray, 90), color.white)
+        cell(6, r, ls == 0 ? "-" : fmt(lsl), color.new(color.red, 80), color.white)
+        cell(7, r, ls == 0 ? "-" : fmt(ltp), color.new(color.lime, 80), color.white)
+
+notify(on, sym, ls, le, lsl, ltp, lst, htf) =>
+    isNew = on and not na(lst) and (na(lst[1]) or lst != lst[1])
+    if isNew and ls != 0 and htfOk(ls, htf)
+        alert(shortName(sym) + " " + scanTf + (ls == 1 ? " BUY" : " SELL") + " (SMC BOS retest) | entry " + fmt(le) + " | SL " + fmt(lsl) + " | TP " + fmt(ltp), alert.freq_once_per_bar_close)
+
+// ---------------- Scan ----------------
+[st1,  tr1,  lv1,  ls1,  le1,  sl1,  tp1,  ts1,  bs1,  px1,  h1]  = scan(s1)
+[st2,  tr2,  lv2,  ls2,  le2,  sl2,  tp2,  ts2,  bs2,  px2,  h2]  = scan(s2)
+[st3,  tr3,  lv3,  ls3,  le3,  sl3,  tp3,  ts3,  bs3,  px3,  h3]  = scan(s3)
+[st4,  tr4,  lv4,  ls4,  le4,  sl4,  tp4,  ts4,  bs4,  px4,  h4]  = scan(s4)
+[st5,  tr5,  lv5,  ls5,  le5,  sl5,  tp5,  ts5,  bs5,  px5,  h5]  = scan(s5)
+[st6,  tr6,  lv6,  ls6,  le6,  sl6,  tp6,  ts6,  bs6,  px6,  h6]  = scan(s6)
+[st7,  tr7,  lv7,  ls7,  le7,  sl7,  tp7,  ts7,  bs7,  px7,  h7]  = scan(s7)
+[st8,  tr8,  lv8,  ls8,  le8,  sl8,  tp8,  ts8,  bs8,  px8,  h8]  = scan(s8)
+[st9,  tr9,  lv9,  ls9,  le9,  sl9,  tp9,  ts9,  bs9,  px9,  h9]  = scan(s9)
+[st10, tr10, lv10, ls10, le10, sl10, tp10, ts10, bs10, px10, h10] = scan(s10)
+[st11, tr11, lv11, ls11, le11, sl11, tp11, ts11, bs11, px11, h11] = scan(s11)
+[st12, tr12, lv12, ls12, le12, sl12, tp12, ts12, bs12, px12, h12] = scan(s12)
+
+notify(on1,  s1,  ls1,  le1,  sl1,  tp1,  ts1,  h1)
+notify(on2,  s2,  ls2,  le2,  sl2,  tp2,  ts2,  h2)
+notify(on3,  s3,  ls3,  le3,  sl3,  tp3,  ts3,  h3)
+notify(on4,  s4,  ls4,  le4,  sl4,  tp4,  ts4,  h4)
+notify(on5,  s5,  ls5,  le5,  sl5,  tp5,  ts5,  h5)
+notify(on6,  s6,  ls6,  le6,  sl6,  tp6,  ts6,  h6)
+notify(on7,  s7,  ls7,  le7,  sl7,  tp7,  ts7,  h7)
+notify(on8,  s8,  ls8,  le8,  sl8,  tp8,  ts8,  h8)
+notify(on9,  s9,  ls9,  le9,  sl9,  tp9,  ts9,  h9)
+notify(on10, s10, ls10, le10, sl10, tp10, ts10, h10)
+notify(on11, s11, ls11, le11, sl11, tp11, ts11, h11)
+notify(on12, s12, ls12, le12, sl12, tp12, ts12, h12)
+
+if barstate.islast
+    hdr = color.new(color.blue, 40)
+    cell(0, 0, "Symbol", hdr, color.white)
+    cell(1, 0, "Price", hdr, color.white)
+    cell(2, 0, "Trend " + scanTf, hdr, color.white)
+    cell(3, 0, "HTF " + htfTf, hdr, color.white)
+    cell(4, 0, "Status", hdr, color.white)
+    cell(5, 0, "Entry", hdr, color.white)
+    cell(6, 0, "SL", hdr, color.white)
+    cell(7, 0, "TP", hdr, color.white)
+    row(1,  on1,  s1,  st1,  tr1,  lv1,  ls1,  le1,  sl1,  tp1,  bs1,  px1,  h1)
+    row(2,  on2,  s2,  st2,  tr2,  lv2,  ls2,  le2,  sl2,  tp2,  bs2,  px2,  h2)
+    row(3,  on3,  s3,  st3,  tr3,  lv3,  ls3,  le3,  sl3,  tp3,  bs3,  px3,  h3)
+    row(4,  on4,  s4,  st4,  tr4,  lv4,  ls4,  le4,  sl4,  tp4,  bs4,  px4,  h4)
+    row(5,  on5,  s5,  st5,  tr5,  lv5,  ls5,  le5,  sl5,  tp5,  bs5,  px5,  h5)
+    row(6,  on6,  s6,  st6,  tr6,  lv6,  ls6,  le6,  sl6,  tp6,  bs6,  px6,  h6)
+    row(7,  on7,  s7,  st7,  tr7,  lv7,  ls7,  le7,  sl7,  tp7,  bs7,  px7,  h7)
+    row(8,  on8,  s8,  st8,  tr8,  lv8,  ls8,  le8,  sl8,  tp8,  bs8,  px8,  h8)
+    row(9,  on9,  s9,  st9,  tr9,  lv9,  ls9,  le9,  sl9,  tp9,  bs9,  px9,  h9)
+    row(10, on10, s10, st10, tr10, lv10, ls10, le10, sl10, tp10, bs10, px10, h10)
+    row(11, on11, s11, st11, tr11, lv11, ls11, le11, sl11, tp11, bs11, px11, h11)
+    row(12, on12, s12, st12, tr12, lv12, ls12, le12, sl12, tp12, bs12, px12, h12)
