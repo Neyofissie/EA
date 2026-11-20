@@ -1,0 +1,550 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SMC BOS Scanner</title>
+<script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+<style>
+:root{
+  --bg:#0d1017; --panel:#151a23; --panel2:#1b2130; --line:#262e3f; --text:#d7dde8; --muted:#8a94a7;
+  --up:#22c55e; --down:#ef4444; --warn:#f59e0b; --accent:#3b82f6;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+button,select,input,textarea{font:inherit;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:6px 10px}
+button{cursor:pointer}
+button:hover{border-color:var(--accent)}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+button.on{background:#24324d;border-color:var(--accent)}
+header{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 16px;border-bottom:1px solid var(--line);background:var(--panel)}
+header h1{font-size:16px;margin:0 12px 0 0;white-space:nowrap}
+.tfs{display:flex;gap:2px}
+.tfs button{padding:6px 8px}
+.grow{flex:1}
+main{display:grid;grid-template-columns:1fr 360px;gap:12px;padding:12px 16px;height:calc(100% - 58px)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px}
+.chartwrap{display:flex;flex-direction:column;min-height:420px}
+.tabs{display:flex;gap:4px;padding:8px;border-bottom:1px solid var(--line);align-items:center}
+.tabs .status{margin-left:auto;color:var(--muted);font-size:12px}
+#chart,#tv{flex:1;min-height:380px}
+#tv{display:none}
+aside{display:flex;flex-direction:column;gap:12px;overflow:auto;min-height:0}
+.card h2{font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:0;padding:10px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px}
+.card h2 .r{margin-left:auto}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;padding:12px}
+.kv div:nth-child(odd){color:var(--muted)}
+.pill{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;font-weight:600}
+.pill.up{background:rgba(34,197,94,.18);color:var(--up)}
+.pill.down{background:rgba(239,68,68,.18);color:var(--down)}
+.pill.neu{background:rgba(138,148,167,.18);color:var(--muted)}
+.pill.warn{background:rgba(245,158,11,.18);color:var(--warn)}
+.big{font-size:18px;font-weight:700}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+th{color:var(--muted);font-weight:500}
+tbody tr{cursor:pointer}
+tbody tr:hover{background:var(--panel2)}
+.muted{color:var(--muted)}
+.hist{max-height:220px;overflow:auto}
+dialog{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:12px;max-width:560px;width:calc(100% - 32px)}
+dialog::backdrop{background:rgba(0,0,0,.6)}
+.form{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.form label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
+.form .full{grid-column:1/-1}
+.toast{position:fixed;right:16px;bottom:16px;display:flex;flex-direction:column;gap:8px;z-index:9}
+.toast div{background:var(--panel2);border:1px solid var(--line);border-left:4px solid var(--accent);padding:10px 14px;border-radius:8px;max-width:320px}
+@media (max-width:900px){
+  main{grid-template-columns:1fr;height:auto}
+  header h1{width:100%}
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>SMC BOS + Retest Scanner</h1>
+  <select id="source" title="Data source">
+    <option value="binance">Crypto (Binance)</option>
+    <option value="twelvedata">Forex / Gold / Indices (Twelve Data)</option>
+    <option value="demo">Demo data</option>
+  </select>
+  <input id="symbol" list="symlist" size="11" title="Symbol">
+  <datalist id="symlist"></datalist>
+  <div class="tfs" id="tfs"></div>
+  <label class="muted">HTF <select id="htf"></select></label>
+  <button class="primary" id="scanBtn">Scan chart</button>
+  <select id="auto" title="Auto re-scan">
+    <option value="0">Auto: off</option>
+    <option value="60">Auto: 1 min</option>
+    <option value="300">Auto: 5 min</option>
+    <option value="900">Auto: 15 min</option>
+  </select>
+  <span class="grow"></span>
+  <button id="settingsBtn">Settings</button>
+</header>
+
+<main>
+  <section class="card chartwrap">
+    <div class="tabs">
+      <button id="tabSig" class="on">Signals chart</button>
+      <button id="tabTv">TradingView chart</button>
+      <span class="status" id="status">Ready</span>
+    </div>
+    <div id="chart"></div>
+    <div id="tv"></div>
+  </section>
+
+  <aside>
+    <div class="card">
+      <h2>Current chart <span class="r" id="curSym"></span></h2>
+      <div class="kv" id="cur"><div>Status</div><div class="muted">Press “Scan chart”</div></div>
+    </div>
+    <div class="card">
+      <h2>Watchlist scanner <span class="r"><button id="scanAllBtn">Scan all</button></span></h2>
+      <div style="overflow:auto"><table>
+        <thead><tr><th>Symbol</th><th>Trend</th><th>HTF</th><th>Status</th></tr></thead>
+        <tbody id="wl"></tbody>
+      </table></div>
+    </div>
+    <div class="card">
+      <h2>Signals on this chart</h2>
+      <div class="hist"><table>
+        <thead><tr><th>Time</th><th>Side</th><th>Entry</th><th>SL</th><th>TP</th></tr></thead>
+        <tbody id="hist"></tbody>
+      </table></div>
+    </div>
+  </aside>
+</main>
+
+<dialog id="settings">
+  <h3 style="margin-top:0">Settings</h3>
+  <div class="form">
+    <label class="full">Twelve Data API key (free at twelvedata.com — needed for forex/gold; stays in this browser)
+      <input id="s_tdkey" type="password" autocomplete="off"></label>
+    <label>Swing length (bars each side)<input id="s_swing" type="number" min="1"></label>
+    <label>Trend filter
+      <select id="s_trend"><option>EMA + Structure</option><option>EMA</option><option>Structure</option><option>None</option></select></label>
+    <label>Trend EMA length<input id="s_ema" type="number" min="2"></label>
+    <label>HTF EMA length<input id="s_htfema" type="number" min="2"></label>
+    <label>Require HTF bias<select id="s_usehtf"><option value="1">Yes</option><option value="0">No</option></select></label>
+    <label>Retest tolerance (× ATR)<input id="s_tol" type="number" step="0.05" min="0"></label>
+    <label>Max bars to wait for retest<input id="s_maxr" type="number" min="1"></label>
+    <label>Rejection candle required<select id="s_rej"><option value="1">Yes</option><option value="0">No</option></select></label>
+    <label>SL buffer (× ATR)<input id="s_sl" type="number" step="0.1" min="0"></label>
+    <label>Take-profit R:R<input id="s_rr" type="number" step="0.1" min="0.1"></label>
+    <label>“Fresh” signal = within N bars<input id="s_fresh" type="number" min="1"></label>
+    <label>Closed candles only<select id="s_closed"><option value="1">Yes</option><option value="0">No</option></select></label>
+    <label class="full">Watchlist — Crypto (one per line)<textarea id="s_wl_binance" rows="3"></textarea></label>
+    <label class="full">Watchlist — Forex / Twelve Data (e.g. EUR/USD, XAU/USD)<textarea id="s_wl_twelvedata" rows="3"></textarea></label>
+  </div>
+  <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+    <button id="notifyBtn">Enable notifications</button>
+    <button id="closeSettings">Cancel</button>
+    <button class="primary" id="saveSettings">Save</button>
+  </div>
+</dialog>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ======================= Config / persistence =======================
+const TFS = [
+  {k:'1m',  ms:60e3,     bin:'1m',  td:'1min',  tv:'1'},
+  {k:'5m',  ms:300e3,    bin:'5m',  td:'5min',  tv:'5'},
+  {k:'15m', ms:900e3,    bin:'15m', td:'15min', tv:'15'},
+  {k:'30m', ms:1800e3,   bin:'30m', td:'30min', tv:'30'},
+  {k:'1h',  ms:3600e3,   bin:'1h',  td:'1h',    tv:'60'},
+  {k:'4h',  ms:14400e3,  bin:'4h',  td:'4h',    tv:'240'},
+  {k:'1d',  ms:86400e3,  bin:'1d',  td:'1day',  tv:'D'},
+];
+const tfOf = k => TFS.find(t => t.k === k);
+
+const DEFAULTS = {
+  source:'binance', symbol:{binance:'BTCUSDT', twelvedata:'EUR/USD', demo:'DEMO-1'},
+  tf:'15m', htf:'4h', auto:'0', tdkey:'',
+  p:{swing:5, trend:'EMA + Structure', ema:200, htfEma:50, useHtf:true, tol:0.25, maxRetest:20, rej:true, slAtr:0.5, rr:2, fresh:5, closed:true},
+  wl:{
+    binance:['BTCUSDT','ETHUSDT','SOLUSDT','BNBUSDT','XRPUSDT','ADAUSDT','DOGEUSDT','AVAXUSDT'],
+    twelvedata:['EUR/USD','GBP/USD','USD/JPY','AUD/USD','USD/CAD','GBP/JPY','EUR/JPY','XAU/USD'],
+    demo:['DEMO-1','DEMO-2','DEMO-3','DEMO-4','DEMO-5','DEMO-6'],
+  },
+};
+function load(){
+  try { const s = JSON.parse(localStorage.getItem('smc-scanner') || 'null'); if (s) return deepMerge(structuredClone(DEFAULTS), s); } catch(e){}
+  return structuredClone(DEFAULTS);
+}
+function deepMerge(a,b){ for (const k in b){ if (b[k] && typeof b[k]==='object' && !Array.isArray(b[k]) && a[k]) deepMerge(a[k], b[k]); else a[k]=b[k]; } return a; }
+function save(){ try { localStorage.setItem('smc-scanner', JSON.stringify(S)); } catch(e){} }
+let S = load();
+
+const $ = id => document.getElementById(id);
+
+// ======================= Data sources =======================
+const lastReq = {};
+async function throttle(src, gapMs){
+  const now = Date.now(), wait = Math.max(0, (lastReq[src]||0) + gapMs - now);
+  lastReq[src] = now + wait;
+  if (wait) await new Promise(r => setTimeout(r, wait));
+}
+const cache = new Map(); // key -> {at, data}
+
+async function getCandles(source, symbol, tfKey, limit=1000){
+  const tf = tfOf(tfKey), key = [source, symbol, tfKey].join('|');
+  const c = cache.get(key);
+  const maxAge = source==='twelvedata' ? Math.min(tf.ms/2, 600e3) : 20e3;
+  if (c && Date.now()-c.at < maxAge) return c.data;
+  let data;
+  if (source === 'binance'){
+    await throttle('binance', 150);
+    const url = `https://data-api.binance.vision/api/v3/klines?symbol=${encodeURIComponent(symbol.toUpperCase())}&interval=${tf.bin}&limit=${limit}`;
+    const r = await fetch(url);
+    if (!r.ok) throw new Error(`Binance ${r.status}: ${(await r.text()).slice(0,120)}`);
+    data = (await r.json()).map(k => ({t:k[0], o:+k[1], h:+k[2], l:+k[3], c:+k[4]}));
+  } else if (source === 'twelvedata'){
+    if (!S.tdkey) throw new Error('Add your free Twelve Data API key in Settings to scan forex/gold.');
+    await throttle('twelvedata', 8000); // free plan: 8 requests / minute
+    const url = `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(symbol)}&interval=${tf.td}&outputsize=${Math.min(limit,5000)}&timezone=UTC&order=ASC&apikey=${encodeURIComponent(S.tdkey)}`;
+    const j = await (await fetch(url)).json();
+    if (j.status === 'error' || !j.values) throw new Error(`Twelve Data: ${j.message || 'no data'}`);
+    data = j.values.map(v => ({t:Date.parse(v.datetime.replace(' ','T') + (v.datetime.length>10?'Z':'T00:00:00Z')), o:+v.open, h:+v.high, l:+v.low, c:+v.close}));
+  } else {
+    data = demoCandles(symbol, tf, limit);
+  }
+  data.sort((a,b) => a.t-b.t);
+  cache.set(key, {at:Date.now(), data});
+  return data;
+}
+
+// Deterministic trending random walk so the app is usable offline
+function demoCandles(symbol, tf, n){
+  let seed = 0; for (const ch of symbol + tf.k) seed = (seed*31 + ch.charCodeAt(0)) >>> 0;
+  const rnd = () => (seed = (seed*1664525 + 1013904223) >>> 0) / 2**32;
+  const end = Math.floor(Date.now()/tf.ms)*tf.ms - tf.ms;
+  let p = 100 + rnd()*50, drift = 0, out = [];
+  for (let i = n-1; i >= 0; i--){
+    if (rnd() < 0.02) drift = (rnd()-0.5) * 0.004;
+    const o = p, vol = p*0.004;
+    const c = o + drift*p + (rnd()-0.5)*vol*2;
+    const h = Math.max(o,c) + rnd()*vol, l = Math.min(o,c) - rnd()*vol;
+    out.push({t:end - i*tf.ms, o, h, l, c}); p = c;
+  }
+  return out;
+}
+
+// ======================= SMC engine =======================
+function emaArr(v, len){ const k = 2/(len+1); let e = null; return v.map(x => e = e===null ? x : x*k + e*(1-k)); }
+function atrArr(cs, len=14){
+  let a = null; return cs.map((c,i) => {
+    const tr = i ? Math.max(c.h-c.l, Math.abs(c.h-cs[i-1].c), Math.abs(c.l-cs[i-1].c)) : c.h-c.l;
+    return a = a===null ? tr : (a*(len-1) + tr)/len;
+  });
+}
+// HTF bias (+1/-1) of the last HTF candle fully closed when each LTF candle closed
+function htfBiasSeries(cs, ltfMs, htf, htfMs, emaLen){
+  const out = new Array(cs.length).fill(0);
+  if (!htf || !htf.length) return out;
+  const e = emaArr(htf.map(c=>c.c), emaLen);
+  let j = -1;
+  for (let i = 0; i < cs.length; i++){
+    const closeT = cs[i].t + ltfMs;
+    while (j+1 < htf.length && htf[j+1].t + htfMs <= closeT) j++;
+    out[i] = j < emaLen ? 0 : (htf[j].c > e[j] ? 1 : -1);
+  }
+  return out;
+}
+
+function analyze(cs, p, htfBias){
+  const n = cs.length, L = p.swing;
+  const ema = emaArr(cs.map(c=>c.c), p.ema), atr = atrArr(cs);
+  let lastH=null, prevH=null, lastHIdx=null, hBroken=true;
+  let lastL=null, prevL=null, lastLIdx=null, lBroken=true;
+  let state=0, lvl=null, lvlIdx=null, bosIdx=null, trendDir=0;
+  const bos=[], signals=[];
+  for (let i = 0; i < n; i++){
+    const c = cs[i];
+    // pivot confirmed now at j = i-L
+    const j = i - L;
+    if (j >= L){
+      let isH = true, isL = true;
+      for (let k = j-L; k <= j+L; k++){ if (k===j) continue;
+        if (cs[k].h >= cs[j].h) isH = false;
+        if (cs[k].l <= cs[j].l) isL = false; }
+      if (isH){ prevH=lastH; lastH=cs[j].h; lastHIdx=j; hBroken=false; }
+      if (isL){ prevL=lastL; lastL=cs[j].l; lastLIdx=j; lBroken=false; }
+    }
+    const haveS = prevH!==null && prevL!==null;
+    const sUp = haveS && lastH>prevH && lastL>prevL, sDn = haveS && lastH<prevH && lastL<prevL;
+    const eUp = i>=3 && c.c>ema[i] && ema[i]>ema[i-3], eDn = i>=3 && c.c<ema[i] && ema[i]<ema[i-3];
+    const tUp = p.trend==='EMA' ? eUp : p.trend==='Structure' ? sUp : p.trend==='EMA + Structure' ? eUp&&sUp : true;
+    const tDn = p.trend==='EMA' ? eDn : p.trend==='Structure' ? sDn : p.trend==='EMA + Structure' ? eDn&&sDn : true;
+    trendDir = tUp && !tDn ? 1 : tDn && !tUp ? -1 : 0;
+    const tol = atr[i]*p.tol;
+
+    // pending retest
+    if (state === 1){
+      if (c.c < lvl - tol || i - bosIdx > p.maxRetest) state = 0;
+      else if (i > bosIdx && c.l <= lvl + tol && c.c > lvl && (!p.rej || c.c > c.o)){
+        const sl = Math.min(c.l, lvl) - p.slAtr*atr[i];
+        signals.push({i, t:c.t, dir:1, entry:c.c, sl, tp:c.c + p.rr*(c.c-sl), level:lvl, htf:htfBias[i]});
+        state = 0;
+      }
+    } else if (state === -1){
+      if (c.c > lvl + tol || i - bosIdx > p.maxRetest) state = 0;
+      else if (i > bosIdx && c.h >= lvl - tol && c.c < lvl && (!p.rej || c.c < c.o)){
+        const sl = Math.max(c.h, lvl) + p.slAtr*atr[i];
+        signals.push({i, t:c.t, dir:-1, entry:c.c, sl, tp:c.c - p.rr*(sl-c.c), level:lvl, htf:htfBias[i]});
+        state = 0;
+      }
+    }
+    // break of structure with the trend
+    if (!hBroken && lastH!==null && c.c > lastH){
+      hBroken = true;
+      if (tUp){ state=1; lvl=lastH; lvlIdx=lastHIdx; bosIdx=i; bos.push({from:lastHIdx, to:i, level:lastH, dir:1}); }
+    }
+    if (!lBroken && lastL!==null && c.c < lastL){
+      lBroken = true;
+      if (tDn){ state=-1; lvl=lastL; lvlIdx=lastLIdx; bosIdx=i; bos.push({from:lastLIdx, to:i, level:lastL, dir:-1}); }
+    }
+  }
+  const ok = s => !p.useHtf || s.htf === s.dir;
+  const good = signals.filter(ok);
+  const last = good[good.length-1] || null;
+  return {
+    ema, bos, signals:good, trendDir, state, level:state ? lvl : null,
+    pendingBars: state ? n-1-bosIdx : null, htf: htfBias[n-1] || 0,
+    last, lastAgo: last ? n-1-last.i : null, price: cs[n-1]?.c,
+  };
+}
+
+async function scanSymbol(source, symbol, tfKey, htfKey){
+  const p = S.p, tf = tfOf(tfKey), htf = tfOf(htfKey);
+  const need = Math.max(1000, p.ema*3);
+  let cs = await getCandles(source, symbol, tfKey, need);
+  if (p.closed) cs = cs.filter(c => c.t + tf.ms <= Date.now());
+  let bias = new Array(cs.length).fill(0);
+  if (p.useHtf){
+    const h = (await getCandles(source, symbol, htfKey, 500)).filter(c => c.t + htf.ms <= Date.now());
+    bias = htfBiasSeries(cs, tf.ms, h, htf.ms, p.htfEma);
+  }
+  return {cs, r: analyze(cs, p, bias)};
+}
+
+// ======================= Formatting =======================
+const decimals = v => v >= 1000 ? 2 : v >= 20 ? 3 : 5;
+const fmt = v => v==null || isNaN(v) ? '–' : (+v).toFixed(decimals(Math.abs(v)));
+const dirPill = d => d===1 ? '<span class="pill up">UP</span>' : d===-1 ? '<span class="pill down">DOWN</span>' : '<span class="pill neu">–</span>';
+const fmtTime = t => new Date(t).toLocaleString([], {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
+function statusHtml(r){
+  if (r.state === 1) return `<span class="pill warn">Bull BOS · wait retest ${fmt(r.level)}</span>`;
+  if (r.state === -1) return `<span class="pill warn">Bear BOS · wait retest ${fmt(r.level)}</span>`;
+  if (r.last && r.lastAgo <= S.p.fresh) return `<span class="pill ${r.last.dir===1?'up':'down'}">${r.last.dir===1?'BUY':'SELL'} · ${r.lastAgo} bars ago</span>`;
+  return '<span class="muted">No setup</span>';
+}
+const esc = s => String(s).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+
+// ======================= Chart =======================
+const chart = LightweightCharts.createChart($('chart'), {
+  autoSize:true,
+  layout:{background:{type:'solid', color:'#151a23'}, textColor:'#c9d1d9'},
+  grid:{vertLines:{color:'#1e2533'}, horzLines:{color:'#1e2533'}},
+  timeScale:{timeVisible:true, secondsVisible:false, borderColor:'#262e3f'},
+  rightPriceScale:{borderColor:'#262e3f'},
+  crosshair:{mode:0},
+});
+const candles = chart.addCandlestickSeries({upColor:'#22c55e', downColor:'#ef4444', wickUpColor:'#22c55e', wickDownColor:'#ef4444', borderVisible:false});
+const emaLine = chart.addLineSeries({color:'#64748b', lineWidth:2, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false});
+let extraSeries = [], priceLines = [];
+
+function draw(cs, r){
+  const d = decimals(cs[cs.length-1]?.c || 1);
+  candles.applyOptions({priceFormat:{type:'price', precision:d, minMove:Math.pow(10,-d)}});
+  candles.setData(cs.map(c => ({time:c.t/1000, open:c.o, high:c.h, low:c.l, close:c.c})));
+  emaLine.applyOptions({color: r.trendDir===1 ? '#14b8a6' : r.trendDir===-1 ? '#be123c' : '#64748b'});
+  emaLine.setData(cs.map((c,i) => ({time:c.t/1000, value:r.ema[i]})).slice(Math.min(S.p.ema, cs.length-1)));
+  extraSeries.forEach(s => chart.removeSeries(s)); extraSeries = [];
+  priceLines.forEach(l => candles.removePriceLine(l)); priceLines = [];
+
+  for (const b of r.bos.slice(-40)){
+    const s = chart.addLineSeries({color: b.dir===1 ? '#14b8a6' : '#e11d48', lineWidth:1, lineStyle:2, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false});
+    s.setData([{time:cs[b.from].t/1000, value:b.level}, {time:cs[b.to].t/1000, value:b.level}]);
+    extraSeries.push(s);
+  }
+  const markers = [];
+  for (const b of r.bos.slice(-40)) markers.push({time:cs[b.to].t/1000, position:b.dir===1?'aboveBar':'belowBar', color:'#94a3b8', shape:'circle', size:0.4, text:'BOS'});
+  for (const s of r.signals) markers.push({time:s.t/1000, position:s.dir===1?'belowBar':'aboveBar', color:s.dir===1?'#22c55e':'#ef4444', shape:s.dir===1?'arrowUp':'arrowDown', text:s.dir===1?'BUY':'SELL'});
+  markers.sort((a,b) => a.time-b.time);
+  candles.setMarkers(markers);
+
+  if (r.state) priceLines.push(candles.createPriceLine({price:r.level, color:'#f59e0b', lineWidth:1, lineStyle:2, title:'Retest zone'}));
+  if (r.last && r.lastAgo <= 50){
+    priceLines.push(candles.createPriceLine({price:r.last.entry, color:'#94a3b8', lineWidth:1, lineStyle:1, title:'Entry'}));
+    priceLines.push(candles.createPriceLine({price:r.last.sl, color:'#ef4444', lineWidth:2, title:'SL'}));
+    priceLines.push(candles.createPriceLine({price:r.last.tp, color:'#22c55e', lineWidth:2, title:'TP'}));
+  }
+}
+
+// ======================= TradingView widget =======================
+function tvSymbol(source, sym){
+  if (source === 'binance') return 'BINANCE:' + sym.toUpperCase();
+  if (source === 'twelvedata'){
+    const s = sym.replace('/', '').toUpperCase();
+    return /^(XAU|XAG)/.test(s) ? 'OANDA:' + s : sym.includes('/') ? 'FX:' + s : s;
+  }
+  return 'BINANCE:BTCUSDT';
+}
+let tvLoaded = null;
+function loadTv(){
+  if (!tvLoaded) tvLoaded = new Promise((res, rej) => {
+    const s = document.createElement('script'); s.src = 'https://s3.tradingview.com/tv.js';
+    s.onload = res; s.onerror = () => rej(new Error('Could not load TradingView'));
+    document.head.appendChild(s);
+  });
+  return tvLoaded;
+}
+async function showTv(){
+  $('tv').innerHTML = '<div id="tvInner" style="height:100%"></div>';
+  try {
+    await loadTv();
+    new TradingView.widget({container_id:'tvInner', autosize:true, symbol:tvSymbol(S.source, curSymbol()), interval:tfOf(S.tf).tv,
+      theme:'dark', style:'1', timezone:'Etc/UTC', allow_symbol_change:true, hide_side_toolbar:false,
+      studies:['MAExp@tv-basicstudies']});
+  } catch(e){ $('tv').innerHTML = `<p style="padding:16px">${esc(e.message)}</p>`; }
+}
+function setTab(tv){
+  $('tabTv').classList.toggle('on', tv); $('tabSig').classList.toggle('on', !tv);
+  $('tv').style.display = tv ? 'block' : 'none'; $('chart').style.display = tv ? 'none' : 'block';
+  if (tv) showTv();
+}
+
+// ======================= UI wiring =======================
+const curSymbol = () => S.symbol[S.source] || '';
+function setStatus(t){ $('status').textContent = t; }
+function toast(msg){
+  const d = document.createElement('div'); d.textContent = msg; $('toast').appendChild(d);
+  setTimeout(() => d.remove(), 8000);
+}
+
+function renderHeader(){
+  $('source').value = S.source;
+  $('symbol').value = curSymbol();
+  $('symlist').innerHTML = (S.wl[S.source]||[]).map(s => `<option value="${esc(s)}">`).join('');
+  $('tfs').innerHTML = TFS.map(t => `<button data-tf="${t.k}" class="${t.k===S.tf?'on':''}">${t.k}</button>`).join('');
+  $('htf').innerHTML = TFS.map(t => `<option ${t.k===S.htf?'selected':''}>${t.k}</option>`).join('');
+  $('auto').value = S.auto;
+  renderWatchlist();
+}
+
+async function scanCurrent(){
+  const sym = curSymbol().trim(); if (!sym) return;
+  $('curSym').textContent = `${sym} · ${S.tf}`;
+  setStatus(`Scanning ${sym}…`);
+  try {
+    const {cs, r} = await scanSymbol(S.source, sym, S.tf, S.htf);
+    if (cs.length < 50) throw new Error('Not enough candles returned.');
+    draw(cs, r);
+    $('cur').innerHTML = `
+      <div>Price</div><div class="big">${fmt(r.price)}</div>
+      <div>Trend (${S.tf})</div><div>${dirPill(r.trendDir)}</div>
+      <div>HTF (${S.htf})</div><div>${S.p.useHtf ? dirPill(r.htf) : '<span class="muted">off</span>'}</div>
+      <div>Status</div><div>${statusHtml(r)}</div>
+      ${r.last ? `<div>Last signal</div><div><span class="pill ${r.last.dir===1?'up':'down'}">${r.last.dir===1?'BUY':'SELL'}</span> ${r.lastAgo} bars ago</div>
+      <div>Entry</div><div>${fmt(r.last.entry)}</div>
+      <div>Stop loss</div><div style="color:var(--down)">${fmt(r.last.sl)}</div>
+      <div>Take profit</div><div style="color:var(--up)">${fmt(r.last.tp)}</div>` : '<div>Last signal</div><div class="muted">None in loaded history</div>'}`;
+    $('hist').innerHTML = r.signals.slice().reverse().map(s => `<tr><td>${fmtTime(s.t)}</td>
+      <td><span class="pill ${s.dir===1?'up':'down'}">${s.dir===1?'BUY':'SELL'}</span></td>
+      <td>${fmt(s.entry)}</td><td>${fmt(s.sl)}</td><td>${fmt(s.tp)}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">No signals in loaded history</td></tr>';
+    checkNew(S.source, sym, S.tf, r);
+    setStatus(`Updated ${new Date().toLocaleTimeString()} · ${cs.length} candles`);
+  } catch(e){ setStatus('Error'); $('cur').innerHTML = `<div>Error</div><div style="color:var(--down)">${esc(e.message)}</div>`; }
+}
+
+const wlResults = {};
+function renderWatchlist(){
+  const list = S.wl[S.source] || [];
+  $('wl').innerHTML = list.map(sym => {
+    const x = wlResults[[S.source, sym, S.tf, S.htf].join('|')];
+    const row = !x ? '<td colspan="3" class="muted">–</td>' : x.err ? `<td colspan="3" style="color:var(--down)" title="${esc(x.err)}">error</td>`
+      : `<td>${dirPill(x.r.trendDir)}</td><td>${S.p.useHtf ? dirPill(x.r.htf) : '–'}</td><td>${statusHtml(x.r)}</td>`;
+    return `<tr data-sym="${esc(sym)}"><td><b>${esc(sym)}</b></td>${row}</tr>`;
+  }).join('') || '<tr><td colspan="4" class="muted">Add symbols in Settings</td></tr>';
+}
+let scanningAll = false;
+async function scanAll(){
+  if (scanningAll) return; scanningAll = true;
+  const list = S.wl[S.source] || [];
+  for (let k = 0; k < list.length; k++){
+    const sym = list[k];
+    setStatus(`Watchlist ${k+1}/${list.length}: ${sym}`);
+    const key = [S.source, sym, S.tf, S.htf].join('|');
+    try { const {r} = await scanSymbol(S.source, sym, S.tf, S.htf); wlResults[key] = {r}; checkNew(S.source, sym, S.tf, r); }
+    catch(e){ wlResults[key] = {err:e.message}; }
+    renderWatchlist();
+  }
+  setStatus(`Watchlist scanned ${new Date().toLocaleTimeString()}`);
+  scanningAll = false;
+}
+
+// New-signal notifications (only for signals that appear after the app started watching)
+const seen = {};
+function checkNew(source, sym, tf, r){
+  const key = [source, sym, tf].join('|');
+  const t = r.last ? r.last.t : 0;
+  if (key in seen && t > seen[key] && r.lastAgo <= 1){
+    const msg = `${sym} ${tf}: ${r.last.dir===1?'BUY':'SELL'} @ ${fmt(r.last.entry)} · SL ${fmt(r.last.sl)} · TP ${fmt(r.last.tp)}`;
+    toast(msg); beep();
+    try { if (Notification.permission === 'granted') new Notification('SMC signal', {body:msg}); } catch(e){}
+  }
+  seen[key] = Math.max(seen[key]||0, t);
+}
+function beep(){
+  try { const a = new AudioContext(), o = a.createOscillator(), g = a.createGain();
+    o.connect(g); g.connect(a.destination); o.frequency.value = 880; g.gain.value = 0.08; o.start(); o.stop(a.currentTime + 0.25); } catch(e){}
+}
+
+let autoTimer = null;
+function setAuto(){
+  clearInterval(autoTimer);
+  const s = +S.auto;
+  if (s) autoTimer = setInterval(async () => { await scanCurrent(); await scanAll(); }, s*1000);
+}
+
+// events
+$('source').onchange = e => { S.source = e.target.value; save(); renderHeader(); scanCurrent(); if (!$('tv').style.display.includes('none')) showTv(); };
+$('symbol').onchange = e => { S.symbol[S.source] = e.target.value.trim(); save(); scanCurrent(); if ($('tabTv').classList.contains('on')) showTv(); };
+$('tfs').onclick = e => { const tf = e.target.dataset.tf; if (!tf) return; S.tf = tf; save(); renderHeader(); scanCurrent(); if ($('tabTv').classList.contains('on')) showTv(); };
+$('htf').onchange = e => { S.htf = e.target.value; save(); renderWatchlist(); scanCurrent(); };
+$('auto').onchange = e => { S.auto = e.target.value; save(); setAuto(); };
+$('scanBtn').onclick = scanCurrent;
+$('scanAllBtn').onclick = scanAll;
+$('wl').onclick = e => { const tr = e.target.closest('tr[data-sym]'); if (!tr) return; S.symbol[S.source] = tr.dataset.sym; save(); $('symbol').value = tr.dataset.sym; scanCurrent(); if ($('tabTv').classList.contains('on')) showTv(); };
+$('tabSig').onclick = () => setTab(false);
+$('tabTv').onclick = () => setTab(true);
+
+const F = [['s_swing','swing',Number],['s_trend','trend',String],['s_ema','ema',Number],['s_htfema','htfEma',Number],
+  ['s_usehtf','useHtf',v=>v==='1'],['s_tol','tol',Number],['s_maxr','maxRetest',Number],['s_rej','rej',v=>v==='1'],
+  ['s_sl','slAtr',Number],['s_rr','rr',Number],['s_fresh','fresh',Number],['s_closed','closed',v=>v==='1']];
+$('settingsBtn').onclick = () => {
+  for (const [id,k] of F){ const v = S.p[k]; $(id).value = typeof v === 'boolean' ? (v?'1':'0') : v; }
+  $('s_tdkey').value = S.tdkey;
+  $('s_wl_binance').value = S.wl.binance.join('\n');
+  $('s_wl_twelvedata').value = S.wl.twelvedata.join('\n');
+  $('settings').showModal();
+};
+$('closeSettings').onclick = () => $('settings').close();
+$('saveSettings').onclick = () => {
+  for (const [id,k,conv] of F) S.p[k] = conv($(id).value);
+  S.tdkey = $('s_tdkey').value.trim();
+  const lines = v => v.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
+  S.wl.binance = lines($('s_wl_binance').value); S.wl.twelvedata = lines($('s_wl_twelvedata').value);
+  save(); $('settings').close(); cache.clear(); for (const k in wlResults) delete wlResults[k];
+  renderHeader(); scanCurrent();
+};
+$('notifyBtn').onclick = async () => { try { const p = await Notification.requestPermission(); toast('Notifications: ' + p); } catch(e){ toast('Notifications not supported here'); } };
+
+renderHeader();
+setAuto();
+scanCurrent();
+</script>
+</body>
+</html>
