@@ -69,6 +69,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 .toast{position:fixed;right:16px;bottom:16px;display:flex;flex-direction:column;gap:8px;z-index:9}
 .toast div{background:var(--panel2);border:1px solid var(--line);border-left:4px solid var(--accent);padding:10px 14px;border-radius:8px;max-width:320px}
 #chart{position:relative}
+#chart.dragging, #chart.dragging *{cursor:grabbing!important}
 #ov{position:absolute;left:0;top:0;pointer-events:none;overflow:hidden;z-index:3}
 .ovr{position:absolute;box-sizing:border-box}
 .ovr.lab-left span{left:6px;right:auto}
@@ -881,6 +882,21 @@ const queueOverlay = () => { if (ovQueued) return; ovQueued = true; requestAnima
 chart.timeScale().subscribeVisibleLogicalRangeChange(queueOverlay);
 chart.subscribeCrosshairMove(queueOverlay);
 try { new ResizeObserver(queueOverlay).observe($('chart')); } catch(e){}
+// Hand tool: while the mouse is held down on the price pane, show a grabbing hand and hide the crosshair
+(() => {
+  const el = $('chart');
+  const inPane = e => { const r = el.getBoundingClientRect(), ts = chart.timeScale();
+    return e.clientX - r.left < ts.width() && e.clientY - r.top < el.clientHeight - ts.height(); };
+  const setCross = on => chart.applyOptions({crosshair:{vertLine:{visible:on}, horzLine:{visible:on}}});
+  el.addEventListener('pointerdown', e => {
+    if (e.pointerType !== 'mouse' || e.button !== 0 || !inPane(e)) return;
+    el.classList.add('dragging'); setCross(false);
+  });
+  const end = () => { if (!el.classList.contains('dragging')) return; el.classList.remove('dragging'); setCross(true); };
+  window.addEventListener('pointerup', end);
+  window.addEventListener('pointercancel', end);
+  window.addEventListener('blur', end);
+})();
 
 function draw(cs, r){
   const n = cs.length, d = decimals(cs[n-1]?.c || 1), ms = tfOf(S.tf).ms, lastT = cs[n-1].t, px = cs[n-1].c;
