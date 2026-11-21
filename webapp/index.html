@@ -134,6 +134,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
     <option value="900">Auto: 15 min</option>
   </select>
   <span class="grow"></span>
+  <button id="brokerBtn">Broker · MT5</button>
   <button id="settingsBtn">Settings</button>
 </header>
 
@@ -167,6 +168,12 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
       <h2>Forecast <span class="r" id="fcSym"></span></h2>
       <div class="kv" id="fc"><div>Setup</div><div class="muted">Press “Scan chart”</div></div>
       <p class="muted" style="margin:0;padding:0 12px 12px;font-size:12px">Projected from the strategy rules and past results on this chart. A plan, not a guarantee.</p>
+    </div>
+    <div class="card">
+      <h2>Broker · MT5 <span class="r" id="bAuto"></span></h2>
+      <div class="kv" id="bInfo"><div>Status</div><div class="muted">Not connected. Press “Broker · MT5” to link your account.</div></div>
+      <div style="overflow:auto"><table><thead><tr><th>Symbol</th><th>Side</th><th>Lots</th><th>P/L</th><th></th></tr></thead><tbody id="bPos"></tbody></table></div>
+      <div id="bLog" class="muted" style="font-size:12px;padding:8px 12px;max-height:120px;overflow:auto"></div>
     </div>
     <div class="card">
       <h2>Current chart <span class="r" id="curSym"></span></h2>
@@ -249,6 +256,38 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
   </div>
 </dialog>
 
+<dialog id="broker">
+  <h3 style="margin-top:0">Connect MT5 (via MetaApi)</h3>
+  <p class="muted" style="margin-top:0;font-size:13px">MetaApi runs MetaTrader 5 in the cloud for you, so this page can read your account and place trades.
+    Your MT5 password is sent straight to MetaApi when you add the account and is not stored in this app.
+    Use a <b>demo account</b> first. Auto-trading only runs while this page is open.</p>
+  <div class="form">
+    <label class="full">MetaApi API token (app.metaapi.cloud → API access)
+      <input id="b_token" type="password" autocomplete="off"></label>
+    <label>Remember token on this device<select id="b_remember"><option value="1">Yes</option><option value="0">No, ask every time</option></select></label>
+    <label>Saved MetaApi accounts<select id="b_account"><option value="">Add a new account below</option></select></label>
+    <div class="full"><button id="b_load" type="button">Load my MetaApi accounts</button></div>
+    <div class="full" style="border-top:1px solid var(--line);padding-top:10px;color:var(--text);font-weight:600">Add a new MT5 account</div>
+    <label>MT5 login (account number)<input id="b_login" inputmode="numeric" autocomplete="off"></label>
+    <label>MT5 password (trading password)<input id="b_pass" type="password" autocomplete="new-password"></label>
+    <label>Broker server (exactly as shown in MT5)<input id="b_server" placeholder="e.g. ICMarketsSC-Demo" autocomplete="off"></label>
+    <label>Name for this account<input id="b_name" placeholder="e.g. My demo"></label>
+    <div class="full" style="border-top:1px solid var(--line);padding-top:10px;color:var(--text);font-weight:600">Auto-trading</div>
+    <label>Auto-trade new signals<select id="b_auto"><option value="0">Off (manual button only)</option><option value="1">On</option></select></label>
+    <label>Risk per trade (% of balance)<input id="b_risk" type="number" step="0.1" min="0.05"></label>
+    <label>Max open trades<input id="b_max" type="number" min="1"></label>
+    <label>Broker symbol suffix (e.g. .m, .raw)<input id="b_suffix" autocomplete="off"></label>
+    <label class="full">Symbol names if your broker differs, one per line, e.g. XAU/USD=GOLD<textarea id="b_map" rows="2" placeholder="XAU/USD=GOLD"></textarea></label>
+  </div>
+  <p class="muted" id="b_msg" style="font-size:13px;min-height:1.2em"></p>
+  <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
+    <button id="b_disconnect" type="button">Disconnect</button>
+    <button id="b_close" type="button">Close</button>
+    <button id="b_save" type="button">Save settings</button>
+    <button class="primary" id="b_connect" type="button">Save &amp; connect</button>
+  </div>
+</dialog>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -277,6 +316,7 @@ const CONF_LABEL = {OB:'Order block', FVG:'Fair value gap', Sweep:'Liquidity swe
 const DEFAULTS = {
   source:'binance', symbol:{binance:'BTCUSDT', twelvedata:'EUR/USD', demo:'DEMO-1'},
   tf:'15m', htf:'4h', auto:'0', tdkey:'',
+  broker:{token:'', remember:true, accountId:'', auto:false, risk:0.5, maxOpen:3, magic:240521, suffix:'', map:'', managed:[]},
   p:{tpMulti:true, tp1R:1, tp3Mode:'liq', tp3R:3, split:'50/30/20', be:true, annot:'all', poi:'level', choch:false, dispAtr:1.0, session:'both', minConf:0, req:[], strategy:'smc', srTouches:2, zoneW:0.5, srLook:300, tpMode:'zone', minRR:1.5, srTrend:'trend', swing:5, trend:'EMA + Structure', ema:200, htfEma:50, useHtf:true, tol:0.25, maxRetest:20, rej:true, slAtr:0.5, rr:2, fresh:5, closed:true},
   wl:{
     binance:['BTCUSDT','ETHUSDT','SOLUSDT','BNBUSDT','XRPUSDT','ADAUSDT','DOGEUSDT','AVAXUSDT'],
@@ -289,7 +329,13 @@ function load(){
   return structuredClone(DEFAULTS);
 }
 function deepMerge(a,b){ for (const k in b){ if (b[k] && typeof b[k]==='object' && !Array.isArray(b[k]) && a[k]) deepMerge(a[k], b[k]); else a[k]=b[k]; } return a; }
-function save(){ try { localStorage.setItem('smc-scanner', JSON.stringify(S)); } catch(e){} }
+function save(){
+  try {
+    const copy = JSON.parse(JSON.stringify(S));
+    if (!S.broker.remember) copy.broker.token = '';
+    localStorage.setItem('smc-scanner', JSON.stringify(copy));
+  } catch(e){}
+}
 let S = load();
 
 const $ = id => document.getElementById(id);
@@ -1114,7 +1160,10 @@ async function scanCurrent(){
       ${r.last ? `<div>Last signal</div><div><span class="pill ${r.last.dir===1?'up':'down'}">${r.last.dir===1?'BUY':'SELL'}</span> ${r.lastAgo} bars ago</div>
       <div>Entry</div><div>${fmt(r.last.entry)}</div>
       <div>Stop loss</div><div style="color:var(--down)">${fmt(r.last.sl)}</div>
-      <div>Take profit</div><div style="color:var(--up)">${S.p.tpMulti ? tpList(r.last.tps, r.last.hits) : fmt(r.last.tp)}</div>` : '<div>Last signal</div><div class="muted">None in loaded history</div>'}`;
+      <div>Take profit</div><div style="color:var(--up)">${S.p.tpMulti ? tpList(r.last.tps, r.last.hits) : fmt(r.last.tp)}</div>
+      ${BROKER.conn && r.last.outcome === 'open' && !r.last.hits ? `<div></div><div><button class="primary" id="tradeNow">Send this trade to MT5</button></div>` : ''}` : '<div>Last signal</div><div class="muted">None in loaded history</div>'}`;
+    LAST_SIG = {sym, sig: r.last};
+    if ($('tradeNow')) $('tradeNow').onclick = () => brokerExecute(sym, r.last, true);
     $('hist').innerHTML = r.signals.slice().reverse().map(s => `<tr><td>${fmtTime(s.t)}</td>
       <td><span class="pill ${s.dir===1?'up':'down'}">${s.dir===1?'BUY':'SELL'}</span> <span class="muted">${s.kind}</span>${s.conf ? '<br>' + confTags(s) : ''}</td>
       <td>${fmt(s.entry)}</td><td>${fmt(s.sl)}</td><td>${S.p.tpMulti ? s.tps.map(fmt).join('<br>') : fmt(s.tp)}</td>
@@ -1161,6 +1210,7 @@ function checkNew(source, sym, tf, r){
   if (key in seen && t > seen[key] && r.lastAgo <= 1){
     const msg = `${sym} ${tf}: ${r.last.dir===1?'BUY':'SELL'} @ ${fmt(r.last.entry)} · SL ${fmt(r.last.sl)} · ${S.p.tpMulti ? tpList(r.last.tps) : 'TP ' + fmt(r.last.tp)}`;
     toast(msg); beep();
+    if (S.broker.auto && BROKER.conn && source === S.source) brokerExecute(sym, r.last, false);
     try { if (Notification.permission === 'granted') new Notification('SMC signal', {body:msg}); } catch(e){}
   }
   seen[key] = Math.max(seen[key]||0, t);
@@ -1224,6 +1274,253 @@ $('saveSettings').onclick = () => {
   renderHeader(); scanCurrent();
 };
 $('notifyBtn').onclick = async () => { try { const p = await Notification.requestPermission(); toast('Notifications: ' + p); } catch(e){ toast('Notifications not supported here'); } };
+
+// ======================= Broker (MT5 via MetaApi) =======================
+const BROKER = {api:null, account:null, conn:null, info:null, positions:[], status:'Not connected', timer:null, busy:false};
+let LAST_SIG = null;
+let sdkLoading = null;
+function loadSdk(){
+  if (window.MetaApi) return Promise.resolve();
+  if (!sdkLoading) sdkLoading = new Promise((res, rej) => {
+    const sc = document.createElement('script');
+    sc.src = 'https://unpkg.com/metaapi.cloud-sdk@29.3.4/dists/umd/index.js';
+    sc.onload = res;
+    sc.onerror = () => { sdkLoading = null; rej(new Error('Could not load the MetaApi library. Check your internet connection.')); };
+    document.head.appendChild(sc);
+  });
+  return sdkLoading;
+}
+const MetaApiClass = () => (window.MetaApi && window.MetaApi.default) || window.MetaApi;
+const errText = e => (e && (e.message || e.toString())) || 'Unknown error';
+function blog(msg, bad){
+  const line = `${new Date().toLocaleTimeString()} · ${msg}`;
+  BROKER.logLines = [line].concat(BROKER.logLines || []).slice(0, 30);
+  $('bLog').innerHTML = BROKER.logLines.map(l => `<div${bad && l === line ? ' class="bad"' : ''}>${esc(l)}</div>`).join('');
+  if (bad) toast(msg);
+}
+function bMsg(t){ $('b_msg').textContent = t; }
+
+function brokerSymbol(sym){
+  for (const line of (S.broker.map || '').split('\n')){
+    const [a, b] = line.split('=').map(x => (x || '').trim());
+    if (a && b && a.toUpperCase() === sym.toUpperCase()) return b;
+  }
+  let b = S.source === 'binance' ? sym.toUpperCase().replace(/USDT$/, 'USD') : sym.replace('/', '').toUpperCase();
+  return b + (S.broker.suffix || '');
+}
+const floorStep = (v, step) => Math.floor(v/step + 1e-9)*step;
+const roundTick = (v, tick) => tick > 0 ? Math.round(v/tick)*tick : v;
+
+function renderBroker(){
+  const i = BROKER.info;
+  $('bAuto').innerHTML = BROKER.conn ? (S.broker.auto ? '<span class="pill up">Auto-trade ON</span>' : '<span class="pill neu">Auto-trade off</span>') : '';
+  $('bInfo').innerHTML = !i ? `<div>Status</div><div class="${BROKER.conn ? '' : 'muted'}">${esc(BROKER.status)}</div>` : `
+    <div>Account</div><div>${esc(i.name || '')} · ${esc(String(i.login || ''))}<br><span class="muted">${esc(i.broker || '')} · ${esc(i.server || '')}</span></div>
+    <div>Balance</div><div class="big">${i.balance.toFixed(2)} ${esc(i.currency)}</div>
+    <div>Equity</div><div>${i.equity.toFixed(2)} ${esc(i.currency)} <span class="muted">· free margin ${i.freeMargin.toFixed(2)}</span></div>
+    <div>Status</div><div>${esc(BROKER.status)}${i.tradeAllowed === false ? ' <span class="bad">· trading not allowed (investor password?)</span>' : ''}</div>`;
+  const mine = BROKER.positions;
+  $('bPos').innerHTML = mine.length ? mine.map(p => `<tr><td><b>${esc(p.symbol)}</b>${p.magic === S.broker.magic ? '' : ' <span class="muted">(manual)</span>'}</td>
+    <td><span class="pill ${/BUY/.test(p.type) ? 'up' : 'down'}">${/BUY/.test(p.type) ? 'BUY' : 'SELL'}</span></td><td>${p.volume}</td>
+    <td class="${p.profit >= 0 ? 'good' : 'bad'}">${p.profit.toFixed(2)}</td><td><button data-close="${esc(String(p.id))}">Close</button></td></tr>`).join('')
+    : `<tr><td colspan="5" class="muted">${BROKER.conn ? 'No open positions' : ''}</td></tr>`;
+}
+
+async function brokerConnect(){
+  if (BROKER.busy) return;
+  if (!S.broker.token) { bMsg('Paste your MetaApi API token first.'); return; }
+  if (!S.broker.accountId) { bMsg('Choose a saved account or add a new one.'); return; }
+  BROKER.busy = true;
+  try {
+    BROKER.status = 'Loading MetaApi…'; renderBroker(); bMsg(BROKER.status);
+    await loadSdk();
+    if (!BROKER.api){ BROKER.api = new (MetaApiClass())(S.broker.token); BROKER.tokenUsed = S.broker.token; }
+    const acc = await BROKER.api.metatraderAccountApi.getAccount(S.broker.accountId);
+    if (acc.state !== 'DEPLOYED' && acc.state !== 'DEPLOYING'){ BROKER.status = 'Starting your MT5 terminal in the cloud…'; renderBroker(); bMsg(BROKER.status); await acc.deploy(); }
+    BROKER.status = 'Waiting for MetaApi to deploy the account…'; renderBroker(); bMsg(BROKER.status);
+    await acc.waitDeployed();
+    BROKER.status = 'Connecting to your broker…'; renderBroker(); bMsg(BROKER.status);
+    await acc.waitConnected();
+    const conn = acc.getRPCConnection();
+    await conn.connect();
+    BROKER.status = 'Synchronising…'; renderBroker(); bMsg(BROKER.status);
+    await conn.waitSynchronized();
+    BROKER.account = acc; BROKER.conn = conn; BROKER.status = 'Connected';
+    await brokerRefresh();
+    clearInterval(BROKER.timer); BROKER.timer = setInterval(brokerTick, 15000);
+    bMsg('Connected.'); blog(`Connected to ${acc.name || acc.login}`);
+    scanCurrent();
+  } catch(e){
+    BROKER.status = 'Connection failed: ' + errText(e); bMsg(BROKER.status); blog(BROKER.status, true);
+  } finally { BROKER.busy = false; renderBroker(); }
+}
+
+async function brokerDisconnect(){
+  clearInterval(BROKER.timer); BROKER.timer = null;
+  try { if (BROKER.conn) await BROKER.conn.close(); } catch(e){}
+  try { if (BROKER.api) BROKER.api.close(); } catch(e){}
+  Object.assign(BROKER, {api:null, account:null, conn:null, info:null, positions:[], status:'Not connected'});
+  renderBroker(); blog('Disconnected');
+}
+
+async function brokerRefresh(){
+  if (!BROKER.conn) return;
+  BROKER.info = await BROKER.conn.getAccountInformation();
+  BROKER.positions = await BROKER.conn.getPositions();
+  renderBroker();
+}
+
+async function brokerTick(){
+  try { await brokerRefresh(); await manageTrades(); }
+  catch(e){ BROKER.status = 'Connection problem: ' + errText(e); renderBroker(); }
+}
+
+// Places one signal. Hedging accounts: three positions with TP1/TP2/TP3 on the broker's server.
+// Netting accounts: one position with TP3 on the server; this page closes the TP1 / TP2 parts.
+async function brokerExecute(sym, sig, manual){
+  const say = (m, bad) => { blog(`${sym}: ${m}`, bad); return false; };
+  try {
+    if (!BROKER.conn) return say('not connected to MT5', true);
+    if (S.source === 'demo') return say('demo data cannot be traded', true);
+    const conn = BROKER.conn, d = sig.dir, bs = brokerSymbol(sym);
+    await brokerRefresh();
+    const info = BROKER.info, mine = BROKER.positions.filter(p => p.magic === S.broker.magic);
+    if (info.tradeAllowed === false) return say('trading is not allowed on this login (investor password?)', true);
+    if (mine.some(p => p.symbol === bs)) return say(`skipped, a trade is already open on ${bs}`);
+    const groups = new Set(mine.map(p => (p.comment || String(p.id)).split(' ')[0])).size;
+    if (groups >= S.broker.maxOpen) return say(`skipped, max open trades (${S.broker.maxOpen}) reached`);
+    const [price, spec] = await Promise.all([conn.getSymbolPrice(bs), conn.getSymbolSpecification(bs)]);
+    const entry = d === 1 ? price.ask : price.bid;
+    const tps = S.p.tpMulti ? sig.tps : [sig.tp, sig.tp, sig.tp];
+    if (d === 1 ? (entry <= sig.sl || entry >= tps[0]) : (entry >= sig.sl || entry <= tps[0])) return say('skipped, price is already past the stop or TP1', true);
+    const tick = spec.tickSize, perLot = Math.abs(entry - sig.sl)/tick * price.lossTickValue;
+    const riskMoney = info.balance * S.broker.risk / 100;
+    let vol = Math.min(floorStep(riskMoney/perLot, spec.volumeStep), spec.maxVolume);
+    if (!(vol >= spec.minVolume)) return say(`skipped, ${S.broker.risk}% risk is below the minimum lot (${spec.minVolume})`, true);
+    const sl = roundTick(sig.sl, tick), T = tps.map(v => roundTick(v, tick));
+    const order = (v, tp, cm) => d === 1
+      ? conn.createMarketBuyOrder(bs, +v.toFixed(8), sl, tp, {comment:cm, magic:S.broker.magic})
+      : conn.createMarketSellOrder(bs, +v.toFixed(8), sl, tp, {comment:cm, magic:S.broker.magic});
+    const tag = `SMCS${Date.now().toString(36).slice(-5)}`;
+    const hedging = /HEDG/i.test(info.marginMode || '');
+    const sp = splitOf(S.p.split);
+    const parts = sp.map(x => floorStep(vol*x, spec.volumeStep));
+    parts[2] = floorStep(vol - parts[0] - parts[1], spec.volumeStep);
+    if (S.p.tpMulti && hedging && parts.every(v => v >= spec.minVolume)){
+      const ids = [];
+      for (let k = 0; k < 3; k++){ const res = await order(parts[k], T[k], `${tag} TP${k+1}`); ids.push(String(res.positionId || res.orderId)); }
+      S.broker.managed.push({type:'group', ids, dir:d, be:false});
+    } else {
+      const res = await order(vol, S.p.tpMulti ? T[2] : T[1], `${tag} ${S.p.tpMulti ? 'TP1-3' : 'TP'}`);
+      if (S.p.tpMulti) S.broker.managed.push({type:'single', id:String(res.positionId || res.orderId), dir:d, tp1:T[0], tp2:T[1], v0:vol, stage:0});
+    }
+    save();
+    blog(`${d === 1 ? 'BUY' : 'SELL'} ${vol} lots ${bs} @ ~${fmt(entry)} · SL ${fmt(sl)} · ${S.p.tpMulti ? tpList(T) : 'TP ' + fmt(T[1])}${manual ? ' (manual)' : ' (auto)'}`);
+    toast(`Sent to MT5: ${d === 1 ? 'BUY' : 'SELL'} ${vol} ${bs}`);
+    await brokerRefresh();
+    return true;
+  } catch(e){ return say('order failed: ' + errText(e), true); }
+}
+
+// TP1 / TP2 partial exits and break-even (runs every 15 s while connected)
+async function manageTrades(){
+  const conn = BROKER.conn; if (!conn || !S.broker.managed.length) return;
+  const pos = new Map(BROKER.positions.map(p => [String(p.id), p]));
+  const sp = splitOf(S.p.split), keep = [];
+  for (const m of S.broker.managed){
+    try {
+      if (m.type === 'group'){
+        const open = m.ids.filter(id => pos.has(id));
+        if (!open.length) continue;                       // all closed
+        // TP1 leg gone while the others are still open: it closed at TP1 (they share one stop)
+        if (!m.be && S.p.be && !pos.has(m.ids[0])){
+          for (const id of open){ const p = pos.get(id); await conn.modifyPosition(id, p.openPrice, p.takeProfit); }
+          m.be = true; blog(`${pos.get(open[0]).symbol}: TP1 hit, stop moved to entry`);
+        }
+        keep.push(m);
+      } else {
+        const p = pos.get(m.id);
+        if (!p) continue;
+        const px = p.currentPrice, reached = lvl => m.dir === 1 ? px >= lvl : px <= lvl;
+        const spec = await conn.getSymbolSpecification(p.symbol);
+        if (m.stage === 0 && reached(m.tp1)){
+          const part = floorStep(m.v0*sp[0], spec.volumeStep);
+          if (part >= spec.minVolume && part < p.volume) await conn.closePositionPartially(m.id, +part.toFixed(8), {});
+          if (S.p.be) await conn.modifyPosition(m.id, p.openPrice, p.takeProfit);
+          m.stage = 1; blog(`${p.symbol}: TP1 hit, closed ${Math.round(sp[0]*100)}%${S.p.be ? ', stop moved to entry' : ''}`);
+        } else if (m.stage === 1 && reached(m.tp2)){
+          const part = floorStep(m.v0*sp[1], spec.volumeStep);
+          if (part >= spec.minVolume && part < p.volume) await conn.closePositionPartially(m.id, +part.toFixed(8), {});
+          m.stage = 2; blog(`${p.symbol}: TP2 hit, closed ${Math.round(sp[1]*100)}%`);
+        }
+        keep.push(m);
+      }
+    } catch(e){ keep.push(m); blog('trade management: ' + errText(e), true); }
+  }
+  S.broker.managed = keep; save();
+}
+
+$('bPos').onclick = async e => {
+  const id = e.target.dataset && e.target.dataset.close; if (!id || !BROKER.conn) return;
+  e.target.disabled = true;
+  try { await BROKER.conn.closePosition(id, {}); blog(`Closed position ${id}`); await brokerRefresh(); }
+  catch(err){ blog('close failed: ' + errText(err), true); e.target.disabled = false; }
+};
+
+function brokerForm(){
+  $('b_token').value = S.broker.token; $('b_remember').value = S.broker.remember ? '1' : '0';
+  $('b_auto').value = S.broker.auto ? '1' : '0'; $('b_risk').value = S.broker.risk; $('b_max').value = S.broker.maxOpen;
+  $('b_suffix').value = S.broker.suffix; $('b_map').value = S.broker.map;
+  if (S.broker.accountId && ![...$('b_account').options].some(o => o.value === S.broker.accountId))
+    $('b_account').insertAdjacentHTML('beforeend', `<option value="${esc(S.broker.accountId)}">Saved account ${esc(S.broker.accountId.slice(0, 8))}…</option>`);
+  $('b_account').value = S.broker.accountId; bMsg('');
+}
+function brokerSaveForm(){
+  S.broker.token = $('b_token').value.trim(); S.broker.remember = $('b_remember').value === '1';
+  S.broker.auto = $('b_auto').value === '1'; S.broker.risk = Math.max(0.05, +$('b_risk').value || 0.5);
+  S.broker.maxOpen = Math.max(1, +$('b_max').value || 1); S.broker.suffix = $('b_suffix').value.trim(); S.broker.map = $('b_map').value;
+  S.broker.accountId = $('b_account').value || S.broker.accountId;
+  if (BROKER.api && BROKER.tokenUsed !== S.broker.token) BROKER.api = null;
+  save(); renderBroker();
+}
+$('brokerBtn').onclick = () => { brokerForm(); $('broker').showModal(); };
+$('b_close').onclick = () => $('broker').close();
+$('b_save').onclick = () => { brokerSaveForm(); bMsg('Saved.'); };
+$('b_disconnect').onclick = () => brokerDisconnect();
+$('b_load').onclick = async () => {
+  brokerSaveForm();
+  if (!S.broker.token) return bMsg('Paste your MetaApi API token first.');
+  try {
+    bMsg('Loading accounts…'); await loadSdk();
+    BROKER.api = BROKER.api || new (MetaApiClass())(S.broker.token); BROKER.tokenUsed = S.broker.token;
+    const list = await BROKER.api.metatraderAccountApi.getAccountsWithInfiniteScrollPagination();
+    $('b_account').innerHTML = '<option value="">Add a new account below</option>' + list.map(a =>
+      `<option value="${esc(a.id)}">${esc(a.name || '')} · ${esc(String(a.login || ''))} · ${esc(a.server || '')}</option>`).join('');
+    $('b_account').value = list.some(a => a.id === S.broker.accountId) ? S.broker.accountId : (list[0] ? list[0].id : '');
+    bMsg(list.length ? `Found ${list.length} account${list.length > 1 ? 's' : ''}.` : 'No accounts yet. Add one below.');
+  } catch(e){ bMsg('Could not load accounts: ' + errText(e)); }
+};
+$('b_connect').onclick = async () => {
+  brokerSaveForm();
+  const login = $('b_login').value.trim(), pass = $('b_pass').value, server = $('b_server').value.trim();
+  if (!$('b_account').value && (login || pass || server)){
+    if (!/^\d+$/.test(login) || !pass || !server) return bMsg('Enter the MT5 login (numbers only), password and server name exactly as in MT5.');
+    try {
+      bMsg('Adding your MT5 account to MetaApi…'); await loadSdk();
+      BROKER.api = BROKER.api || new (MetaApiClass())(S.broker.token); BROKER.tokenUsed = S.broker.token;
+      const acc = await BROKER.api.metatraderAccountApi.createAccount({
+        name: $('b_name').value.trim() || `MT5 ${login}`, type:'cloud-g2', platform:'mt5',
+        login, password: pass, server, magic: S.broker.magic});
+      $('b_pass').value = '';                              // the password is not kept anywhere in this app
+      S.broker.accountId = acc.id; save();
+      $('b_account').insertAdjacentHTML('beforeend', `<option value="${esc(acc.id)}">${esc(acc.name || login)} · ${esc(login)} · ${esc(server)}</option>`);
+      $('b_account').value = acc.id;
+    } catch(e){ return bMsg('MetaApi could not add the account: ' + errText(e)); }
+  }
+  await brokerConnect();
+  if (BROKER.conn) $('broker').close();
+};
+renderBroker();
 
 renderHeader();
 setAuto();

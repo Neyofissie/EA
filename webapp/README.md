@@ -68,3 +68,28 @@ Settings → **Take profits** (on by default; switch to *Single TP* for the old 
 - **Split:** change it with e.g. `40/40/20`.
 
 The backtest simulates the partial exits candle by candle. The stop is checked first on every candle, so a candle touching both SL and TP counts against you. It reports TP1 / TP2 / TP3 hit rates and the real R per trade. In single-TP mode the results are identical to before.
+
+## Broker · MT5 (auto-trading through MetaApi)
+The app can place trades on your MT5 account through **MetaApi** (metaapi.cloud), which runs MT5 in the cloud.
+
+1. Create a MetaApi account and copy your **API token** (app.metaapi.cloud → API access).
+2. In the app press **Broker · MT5**, paste the token, then enter your **MT5 login, password and server** (exactly as shown in MT5), and press **Save & connect**.
+   The password is sent only to MetaApi, which stores it, and it is not kept in this app. The token is saved in this browser unless you choose not to remember it.
+3. Pick a **risk %** and **max open trades**. Add a **symbol suffix** or name map if your broker uses names like `EURUSD.m` or `GOLD`.
+4. Either press **Send this trade to MT5** under *Current chart* when a signal fires, or switch **Auto-trade** on.
+
+**How orders are placed:**
+- **Lot size:** chosen so that hitting the SL loses *risk %* of the balance (MetaApi's tick value and lot step).
+- **Hedging accounts:** three positions with TP1 / TP2 / TP3 on the broker's server. When TP1 fills, the app moves the other two to break-even.
+- **Netting accounts:** one position with the SL and TP3 on the server. The app closes the TP1 / TP2 parts and moves the stop.
+
+**Safety:**
+- One trade per symbol.
+- Max open trades.
+- Skipped if price is already past TP1 or the SL.
+- Demo data is never traded.
+
+**Limits:**
+- Auto-trading and the partial exits only run while the page is open. The SL/TP on the server always stay in place. For 24/7 trading use the MT5 EA in `/mt5`.
+- MetaApi has a free tier with limits; check their pricing.
+- Test with a **demo account** first.
