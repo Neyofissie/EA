@@ -119,3 +119,14 @@ The backtest also always applies **one open trade per pair**, like live trading.
 4. **Choosing:** only trust settings that are good on both halves; a big in-sample number with a weak out-of-sample number is overfitting. **Apply** copies a row's settings into the app.
 
 The forecast's **Filters** row shows ✓ / ✗ for every active filter on the current setup, and **News** shows the next relevant event.
+
+## Sharing signals to Telegram
+- **Copy signal** (top of the Forecast, and *Copy* on every row of the signal history) copies a ready-to-paste message: pair, timeframe, BUY/SELL, entry, SL, TP1/TP2/TP3 with R multiples, R:R, exit plan, confluences, track record, time (UTC) and an optional disclaimer line.
+- **Share…** (phones) opens the system share sheet, so you can pick Telegram and the group.
+- **Send to Telegram** posts it directly through your own bot:
+  1. In Telegram, open **@BotFather** → `/newbot` and copy the token.
+  2. Add the bot to your group or channel as an **admin**, and send any message there.
+  3. In the app: **Settings → Telegram**, paste the token, press **Find my groups**, pick the group (or type the chat ID / `@channel`), then press **Send test message**.
+  4. Optionally switch on **Post new signals automatically** (and *setups forming*). Like the other alerts, this only runs while the app is open.
+
+The bot token is stored only in this browser.

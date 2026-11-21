@@ -129,6 +129,10 @@ button:disabled{opacity:.7;cursor:progress}
 @keyframes spin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){#scanBtn.busy .ico{animation:none}}
 .mobonly,.bnav,.fcmini{display:none}
+.fcact{grid-column:1/-1;display:flex;gap:8px;flex-wrap:wrap;padding-bottom:4px;border-bottom:1px solid var(--line);margin-bottom:2px;padding-bottom:12px}
+.fcact button{flex:1 1 auto}
+button.mini{padding:3px 8px;font-size:12px;min-height:0}
+.tgbtn{background:#229ED9;border-color:#229ED9;color:#fff;font-weight:600}
 .dhead{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
 .dhead h3{margin:0}
 .xbtn{width:36px;height:36px;padding:0;border-radius:999px;font-size:16px;line-height:1}
@@ -336,7 +340,7 @@ button:disabled{opacity:.7;cursor:progress}
     <div class="card c-hist">
       <h2>Signals on this chart</h2>
       <div class="hist"><table>
-        <thead><tr><th>Time</th><th>Side</th><th>Entry</th><th>SL</th><th>TP</th><th>Result</th></tr></thead>
+        <thead><tr><th>Time</th><th>Side</th><th>Entry</th><th>SL</th><th>TP</th><th>Result</th><th></th></tr></thead>
         <tbody id="hist"></tbody>
       </table></div>
     </div>
@@ -414,6 +418,15 @@ button:disabled{opacity:.7;cursor:progress}
     <label>Take-profit R:R<input id="s_rr" type="number" step="0.1" min="0.1"></label>
     <label>“Fresh” signal = within N bars<input id="s_fresh" type="number" min="1"></label>
     <label>Closed candles only<select id="s_closed"><option value="1">Yes</option><option value="0">No</option></select></label>
+    <div class="full" style="border-top:1px solid var(--line);padding-top:10px;color:var(--text);font-weight:600">Telegram</div>
+    <div class="full muted" style="font-size:12px">To post from this app: in Telegram open <b>@BotFather</b> → <b>/newbot</b> and copy the token. Add the bot to your group or channel as an <b>admin</b>, send any message there, then press <b>Find my groups</b>.</div>
+    <label class="full">Bot token<input id="t_token" type="password" autocomplete="off" placeholder="123456789:AA…"></label>
+    <label>Group / channel<select id="t_chatsel"><option value="">Pick after “Find my groups”</option></select></label>
+    <label>…or chat ID / @channel<input id="t_chat" autocomplete="off" placeholder="-1001234567890 or @mychannel"></label>
+    <div class="full" style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" id="t_find">Find my groups</button><button type="button" id="t_test">Send test message</button></div>
+    <label>Post new signals automatically<select id="t_auto"><option value="0">No (buttons only)</option><option value="1">Yes</option></select></label>
+    <label>Also post setups forming (limit orders)<select id="t_setups"><option value="0">No</option><option value="1">Yes</option></select></label>
+    <label class="full">Footer line (optional)<input id="t_footer" autocomplete="off"></label>
     <label class="full">Watchlist — Crypto (one per line)<textarea id="s_wl_binance" rows="3"></textarea></label>
     <label class="full">Watchlist — Forex / Twelve Data (e.g. EUR/USD, XAU/USD)<textarea id="s_wl_twelvedata" rows="3"></textarea></label>
   </div>
@@ -485,6 +498,7 @@ const CONF_LABEL = {OB:'Order block', FVG:'Fair value gap', Sweep:'Liquidity swe
 const DEFAULTS = {
   source:'binance', symbol:{binance:'BTCUSDT', twelvedata:'EUR/USD', demo:'DEMO-1'},
   tf:'15m', htf:'4h', auto:'0', tdkey:'',
+  tg:{token:'', chat:'', auto:false, setups:false, footer:'Not financial advice. Trade at your own risk.'},
   broker:{token:'', remember:true, accountId:'', auto:false, risk:0.5, maxOpen:3, dayLossPct:3, day:null, magic:240521, suffix:'', map:'', managed:[]},
   p:{htfMode:'ema', htfPd:false, adxMin:0, volLo:0, volHi:0, ltfConfirm:false, news:true, newsBefore:30, newsAfter:30, corr:true, dailyLossR:3, maxOpenBt:3, tpMulti:true, tp1R:1, tp3Mode:'liq', tp3R:3, split:'50/30/20', be:true, view:'clean', poi:'level', choch:false, dispAtr:1.0, session:'both', minConf:0, req:[], strategy:'smc', srTouches:2, zoneW:0.5, srLook:300, tpMode:'zone', minRR:1.5, srTrend:'trend', swing:5, trend:'EMA + Structure', ema:200, htfEma:50, useHtf:true, tol:0.25, maxRetest:20, rej:true, slAtr:0.5, rr:2, fresh:5, closed:true},
   wl:{
@@ -1116,7 +1130,7 @@ function forecastHtml(r){
     const s = r.last;
     if (s && s.conf) confRow = `<div>Confluence</div><div>${confTags(s)}</div>`;
   }
-  return `
+  return `<div class="fcact">${shareButtons('plan')}</div>
     <div>Setup</div><div><span class="pill ${!p.htfOk ? 'neu' : up ? 'up' : 'down'}">${side}</span> ${label}</div>
     <div>Entry${p.type==='active' ? '' : ' (approx.)'}</div><div class="big">${fmt(p.entry)}</div>
     <div>Stop loss</div><div style="color:var(--down)">${fmt(p.sl)} <span class="muted">(${dist(risk)} away)</span></div>
@@ -1602,8 +1616,10 @@ const curSymbol = () => S.symbol[S.source] || '';
 const STRAT = {smc:'SMC BOS + retest', sr:'Support & Resistance', both:'SMC + S/R'};
 function setStatus(t){ $('status').textContent = t; }
 function toast(msg){
-  const d = document.createElement('div'); d.textContent = msg; $('toast').appendChild(d);
-  setTimeout(() => d.remove(), 8000);
+  const box = $('toast'), d = document.createElement('div'); d.textContent = msg; d.setAttribute('role', 'status');
+  box.appendChild(d);
+  while (box.children.length > 2) box.firstChild.remove();          // keep at most two on screen
+  setTimeout(() => d.remove(), Math.min(9000, 3500 + msg.length*40));
 }
 
 function renderHeader(){
@@ -1655,12 +1671,14 @@ async function scanCurrent(){
       ${BROKER.conn && r.last.outcome === 'open' && !r.last.hits ? `<div></div><div><button class="primary" id="tradeNow">Send this trade to MT5</button></div>` : ''}` : '<div>Last signal</div><div class="muted">None in loaded history</div>'}`;
     LAST_SIG = {sym, sig: r.last};
     if ($('tradeNow')) $('tradeNow').onclick = () => brokerExecute(sym, r.last, true);
-    $('hist').innerHTML = r.signals.slice().reverse().map(s => `<tr><td>${fmtTime(s.t)}</td>
+    SHARE.sym = sym; SHARE.tf = S.tf; SHARE.plan = r.plan; SHARE.signals = r.signals.slice().reverse(); SHARE.stats = r.stats;
+    $('hist').innerHTML = SHARE.signals.map((s, k) => `<tr><td>${fmtTime(s.t)}</td>
       <td><span class="pill ${s.dir===1?'up':'down'}">${s.dir===1?'BUY':'SELL'}</span> <span class="muted">${s.kind}</span>${s.conf ? '<br>' + confTags(s) : ''}</td>
       <td>${fmt(s.entry)}</td><td>${fmt(s.sl)}</td><td>${S.p.tpMulti ? s.tps.map(fmt).join('<br>') : fmt(s.tp)}</td>
       <td>${s.outcome==='open' ? `<span class="pill warn">Open${s.hits ? ' · TP' + s.hits + ' ✓' : ''}</span>`
         : s.hits ? `<span class="pill up">${S.p.tpMulti ? 'TP' + s.hits : 'TP'} hit</span>` : `<span class="pill down">${s.R > -0.01 && s.R < 0.01 ? 'BE' : 'SL hit'}</span>`}
-        ${s.R !== null ? `<br><span class="${s.R >= 0 ? 'good' : 'bad'}">${sgn(s.R)}R</span>` : ''}</td></tr>`).join('') || '<tr><td colspan="6" class="muted">No signals in loaded history</td></tr>';
+        ${s.R !== null ? `<br><span class="${s.R >= 0 ? 'good' : 'bad'}">${sgn(s.R)}R</span>` : ''}</td>
+      <td><button class="mini" data-copysig="${k}" title="Copy this signal" aria-label="Copy this signal">Copy</button></td></tr>`).join('') || '<tr><td colspan="7" class="muted">No signals in loaded history</td></tr>';
     LAST_SWING[brokerSymbol(sym)] = {lo: r.loAt[r.loAt.length-1], hi: r.hiAt[r.hiAt.length-1]};
     checkNew(S.source, sym, S.tf, r);
     setStatus(`Updated ${new Date().toLocaleTimeString()} · ${cs.length} candles`);
@@ -1715,6 +1733,7 @@ function checkNew(source, sym, tf, r){
     if (nb) toast(`${sym}: not traded, high-impact ${nb.cur} news "${nb.title}" nearby.`);
     else if (S.broker.auto && BROKER.conn && source === S.source) brokerExecute(sym, r.last, false);
     try { if (Notification.permission === 'granted') new Notification('SMC signal', {body:msg}); } catch(e){}
+    if (S.tg.auto && S.tg.token && S.tg.chat) tgSend(signalLines(sym, tf, fromSignal(r.last)), true);
   }
   seen[key] = Math.max(seen[key]||0, t);
   const p = r.plan, sk = key + '|setup', bt = p && p.type==='limit' && p.htfOk && p.bosT ? p.bosT : 0;
@@ -1722,6 +1741,7 @@ function checkNew(source, sym, tf, r){
     const msg = `${sym} ${tf}: ${p.dir===1?'BUY':'SELL'} setup forming. Limit ~${fmt(p.entry)} · SL ${fmt(p.sl)} · ${S.p.tpMulti ? tpList(p.tps) : 'TP ' + fmt(p.tp)}`;
     toast(msg); beep();
     try { if (Notification.permission === 'granted') new Notification('SMC setup forming', {body:msg}); } catch(e){}
+    if (S.tg.auto && S.tg.setups && S.tg.token && S.tg.chat) tgSend(signalLines(sym, tf, fromPlan(p)), true);
   }
   seen[sk] = Math.max(seen[sk]||0, bt);
 }
@@ -1788,6 +1808,8 @@ $('settingsBtn').onclick = () => {
   for (const [id,k] of F){ const v = S.p[k]; $(id).value = typeof v === 'boolean' ? (v?'1':'0') : v; }
   $('s_tdkey').value = S.tdkey;
   for (const k of CONF_KEYS) $('rq_' + k).checked = (S.p.req || []).includes(k);
+  $('t_token').value = S.tg.token; $('t_chat').value = S.tg.chat; $('t_auto').value = S.tg.auto ? '1' : '0';
+  $('t_setups').value = S.tg.setups ? '1' : '0'; $('t_footer').value = S.tg.footer;
   $('s_wl_binance').value = S.wl.binance.join('\n');
   $('s_wl_twelvedata').value = S.wl.twelvedata.join('\n');
   $('settings').showModal();
@@ -1797,12 +1819,117 @@ $('saveSettings').onclick = () => {
   for (const [id,k,conv] of F) S.p[k] = conv($(id).value);
   S.tdkey = $('s_tdkey').value.trim();
   S.p.req = CONF_KEYS.filter(k => $('rq_' + k).checked);
+  readTgForm();
   const lines = v => v.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
   S.wl.binance = lines($('s_wl_binance').value); S.wl.twelvedata = lines($('s_wl_twelvedata').value);
   save(); $('settings').close(); cache.clear(); for (const k in wlResults) delete wlResults[k];
   renderHeader(); scanCurrent();
 };
 $('notifyBtn').onclick = async () => { try { const p = await Notification.requestPermission(); toast('Notifications: ' + p); } catch(e){ toast('Notifications not supported here'); } };
+
+// ======================= Share / Telegram =======================
+const SHARE = {sym:'', tf:'', plan:null, signals:[], stats:null};
+const canShare = () => !!(navigator.share);
+function shareButtons(what){
+  return `<button type="button" data-share="copy" data-what="${what}">Copy signal</button>
+    ${canShare() ? `<button type="button" data-share="native" data-what="${what}">Share…</button>` : ''}
+    ${S.tg.token && S.tg.chat ? `<button type="button" class="tgbtn" data-share="tg" data-what="${what}">Send to Telegram</button>` : ''}`;
+}
+// Normalised trade description from a forecast plan or from a fired signal
+function fromPlan(p){
+  return {dir:p.dir, entry:p.entry, sl:p.sl, tps:p.tps || [p.tp], kind: p.kind === 'sr' ? 'Support & resistance' : p.choch ? 'SMC CHoCH' : 'SMC BOS + retest',
+    state: p.type === 'active' ? 'Running' : p.type === 'limit' ? 'Limit order (wait for the retest)' : 'Pending: only if structure breaks',
+    trigger: p.trigger, gates: p.gates, trail: p.tps && p.tps.trail, hits: p.hits || 0};
+}
+function fromSignal(s){
+  return {dir:s.dir, entry:s.entry, sl:s.sl, tps:s.tps || [s.tp], kind: s.kind === 'SMC' ? 'SMC BOS + retest' : s.kind,
+    state:'Market entry', conf:s.conf, score:s.score, t:s.t, trail: s.tps && s.tps.trail, hits: s.hits || 0};
+}
+function signalLines(sym, tf, x){
+  const up = x.dir === 1, risk = Math.abs(x.entry - x.sl);
+  const L = [`${up ? '🟢 BUY' : '🔴 SELL'} ${sym} · ${tf.toUpperCase()}`, `${x.kind} · ${x.state}`, ''];
+  if (x.trigger != null) L.push(`Trigger: candle close ${up ? 'above' : 'below'} ${fmt(x.trigger)}`);
+  L.push(`Entry: ${fmt(x.entry)}`, `Stop loss: ${fmt(x.sl)}`);
+  const tps = S.p.tpMulti ? x.tps : [x.tps[1] ?? x.tps[0]];
+  tps.forEach((v, k) => {
+    const label = S.p.tpMulti ? `TP${k+1}` : 'Take profit';
+    if (k === 2 && x.trail) L.push(`${label}: trailing stop after TP2`);
+    else L.push(`${label}: ${fmt(v)} (${(Math.abs(v - x.entry)/risk).toFixed(1)}R)${k < x.hits ? ' ✅' : ''}`);
+  });
+  const far = x.trail ? tps[Math.min(1, tps.length-1)] : tps[tps.length-1];
+  L.push(`Risk : reward 1 : ${(Math.abs(far - x.entry)/risk).toFixed(1)}`);
+  if (S.p.tpMulti) L.push(`Plan: close ${S.p.split} at TP1/TP2/TP3${S.p.be ? ', stop to entry after TP1' : ''}`);
+  if (x.conf){ const c = CONF_KEYS.filter(k => x.conf[k]).map(k => CONF_LABEL[k]); if (c.length) L.push(`Confluence: ${c.join(', ')} (${x.score}/6)`); }
+  if (SHARE.stats && SHARE.stats.trades >= 3 && SHARE.sym === sym) L.push(`Track record here: ${pct(SHARE.stats.winRate)} reached TP1 (${SHARE.stats.trades} setups)`);
+  L.push('', `🕒 ${new Date(x.t || Date.now()).toLocaleString('en-GB', {timeZone:'UTC', day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'})} UTC`);
+  if (S.tg.footer) L.push(`⚠️ ${S.tg.footer}`);
+  return L;
+}
+async function copyText(text){
+  try { await navigator.clipboard.writeText(text); return true; }
+  catch(e){
+    const ta = document.createElement('textarea'); ta.value = text; ta.setAttribute('readonly', '');
+    ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0'; document.body.appendChild(ta); ta.select();
+    let ok = false; try { ok = document.execCommand('copy'); } catch(e2){}
+    ta.remove(); return ok;
+  }
+}
+async function tgApi(method, body){
+  const r = await fetch(`https://api.telegram.org/bot${S.tg.token}/${method}`, {
+    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body || {})});
+  const j = await r.json().catch(() => ({ok:false, description:'HTTP ' + r.status}));
+  if (!j.ok) throw new Error(j.description || 'Telegram error');
+  return j.result;
+}
+async function tgSend(lines, auto){
+  try {
+    const html = lines.map((l, k) => k === 0 ? `<b>${esc(l)}</b>` : esc(l)).join('\n');
+    await tgApi('sendMessage', {chat_id: S.tg.chat, text: html, parse_mode:'HTML', disable_web_page_preview:true});
+    toast(auto ? `Posted to Telegram: ${lines[0]}` : 'Sent to Telegram');
+    return true;
+  } catch(e){
+    const m = String(e.message || e);
+    toast(/chat not found/i.test(m) ? 'Telegram: chat not found. Add the bot to the group (as admin) and check the chat ID.'
+      : /unauthorized|404/i.test(m) ? 'Telegram: the bot token is wrong.'
+      : /Failed to fetch/i.test(m) ? 'Telegram could not be reached from this browser. Use Copy signal instead.'
+      : 'Telegram: ' + m);
+    return false;
+  }
+}
+async function doShare(kind, what, idx){
+  let x;
+  if (what === 'plan'){ if (!SHARE.plan){ toast('No setup to share yet.'); return; } x = fromPlan(SHARE.plan); }
+  else { const s = SHARE.signals[idx]; if (!s) return; x = fromSignal(s); }
+  const lines = signalLines(SHARE.sym, SHARE.tf, x), text = lines.join('\n');
+  if (kind === 'copy'){ toast(await copyText(text) ? 'Signal copied. Paste it into your Telegram group.' : 'Could not copy. Long-press to copy instead.'); }
+  else if (kind === 'native'){ try { await navigator.share({title: lines[0], text}); } catch(e){} }
+  else if (kind === 'tg') tgSend(lines, false);
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-share]');
+  if (b){ doShare(b.dataset.share, b.dataset.what); return; }
+  const c = e.target.closest('[data-copysig]');
+  if (c) doShare('copy', 'signal', +c.dataset.copysig);
+});
+function readTgForm(){
+  S.tg.token = $('t_token').value.trim();
+  S.tg.chat = ($('t_chat').value.trim() || $('t_chatsel').value).trim();
+  S.tg.auto = $('t_auto').value === '1'; S.tg.setups = $('t_setups').value === '1'; S.tg.footer = $('t_footer').value.trim();
+}
+$('t_chatsel').onchange = e => { if (e.target.value) $('t_chat').value = e.target.value; };
+$('t_find').onclick = async () => {
+  readTgForm();
+  if (!S.tg.token){ toast('Paste the bot token first.'); return; }
+  try {
+    const ups = await tgApi('getUpdates', {allowed_updates:['message','channel_post','my_chat_member']});
+    const chats = new Map();
+    for (const u of ups){ const c = (u.message || u.channel_post || u.my_chat_member || {}).chat; if (c && c.type !== 'private') chats.set(String(c.id), c.title || c.username || c.id); }
+    $('t_chatsel').innerHTML = '<option value="">Pick a group</option>' + [...chats].map(([id, t]) => `<option value="${esc(id)}">${esc(String(t))} (${esc(id)})</option>`).join('');
+    toast(chats.size ? `Found ${chats.size} group${chats.size > 1 ? 's' : ''}. Pick one.` : 'No groups found yet. Add the bot to the group, send a message there, then try again.');
+  } catch(e){ toast('Telegram: ' + e.message); }
+};
+$('t_test').onclick = () => { readTgForm(); if (!S.tg.token || !S.tg.chat){ toast('Add the bot token and the group first.'); return; }
+  tgSend(['✅ SMC + S/R Scanner connected', 'Signals from the app will appear here.'], false); };
 
 // ======================= News filter =======================
 // High-impact events from a free public economic calendar (this week only), refreshed hourly.
