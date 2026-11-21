@@ -26,7 +26,7 @@ main>*{min-width:0}
 main{display:grid;grid-template-columns:1fr 360px;gap:12px;padding:12px 16px;height:calc(100% - 58px)}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:10px}
 .chartwrap{display:flex;flex-direction:column;min-height:420px}
-.tabs{display:flex;gap:4px;padding:8px;border-bottom:1px solid var(--line);align-items:center}
+.tabs{display:flex;flex-wrap:wrap;gap:4px;padding:8px;border-bottom:1px solid var(--line);align-items:center}
 .tabs .status{margin-left:auto;color:var(--muted);font-size:12px}
 #chart,#tv{flex:1;min-height:380px}
 #tv{display:none}
@@ -145,10 +145,15 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
       <button id="tabSig" class="on">Signals chart</button>
       <button id="tabTv">TradingView chart</button>
       <button id="tabBt">Backtest</button>
+      <button id="viewBtn" title="Switch between a clean chart and all labels">View: Clean</button>
       <span class="status" id="status">Ready</span>
     </div>
     <div id="chart"></div>
     <div id="tv"></div>
+    <div id="tvNote" class="muted" style="display:none;padding:8px 12px;font-size:12px;border-top:1px solid var(--line)">
+      TradingView's embedded chart can't show this app's setups; TradingView doesn't allow websites to draw on it.
+      To see the setups inside TradingView, add the <b>SMC BOS + Retest [Trend]</b> Pine indicator (file <b>tradingview/SMC_BOS_Retest_Indicator.pine</b>) in TradingView's Pine Editor.
+      The <b>Signals chart</b> tab shows everything here.</div>
     <div id="bt" class="bt">
       <div class="btbar">
         <label>Test on <select id="bt_scope"><option value="chart">This chart</option><option value="wl">Whole watchlist</option></select></label>
@@ -212,7 +217,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
     <label>Close at TP1 / TP2 / TP3 (%)<input id="s_split" type="text" placeholder="50/30/20"></label>
     <label>After TP1, move SL to entry<select id="s_be"><option value="1">Yes</option><option value="0">No</option></select></label>
     <div class="full muted" style="font-size:12px">TP2 is the strategy's target: the R:R setting for SMC, or the next S/R level for S/R trades.</div>
-    <label>Chart labels<select id="s_annot"><option value="all">Swings, liquidity, kill zones</option><option value="forecast">Forecast only</option></select></label>
+    <label>Chart view<select id="s_annot"><option value="clean">Clean: setup box, its zone, nearest S/R</option><option value="detailed">Detailed: + swings, liquidity, kill zones, BOS history</option></select></label>
     <div class="full" style="border-top:1px solid var(--line);padding-top:10px;color:var(--text);font-weight:600">SMC confluences</div>
     <label>Entry zone (POI)<select id="s_poi"><option value="level">Broken level (BOS retest)</option><option value="ob">Order block</option><option value="fvg">Fair value gap</option><option value="any">Any: level, OB or FVG</option></select></label>
     <label>Also trade CHoCH reversals<select id="s_choch"><option value="0">No</option><option value="1">Yes</option></select></label>
@@ -318,7 +323,7 @@ const DEFAULTS = {
   source:'binance', symbol:{binance:'BTCUSDT', twelvedata:'EUR/USD', demo:'DEMO-1'},
   tf:'15m', htf:'4h', auto:'0', tdkey:'',
   broker:{token:'', remember:true, accountId:'', auto:false, risk:0.5, maxOpen:3, magic:240521, suffix:'', map:'', managed:[]},
-  p:{tpMulti:true, tp1R:1, tp3Mode:'liq', tp3R:3, split:'50/30/20', be:true, annot:'all', poi:'level', choch:false, dispAtr:1.0, session:'both', minConf:0, req:[], strategy:'smc', srTouches:2, zoneW:0.5, srLook:300, tpMode:'zone', minRR:1.5, srTrend:'trend', swing:5, trend:'EMA + Structure', ema:200, htfEma:50, useHtf:true, tol:0.25, maxRetest:20, rej:true, slAtr:0.5, rr:2, fresh:5, closed:true},
+  p:{tpMulti:true, tp1R:1, tp3Mode:'liq', tp3R:3, split:'50/30/20', be:true, view:'clean', poi:'level', choch:false, dispAtr:1.0, session:'both', minConf:0, req:[], strategy:'smc', srTouches:2, zoneW:0.5, srLook:300, tpMode:'zone', minRR:1.5, srTrend:'trend', swing:5, trend:'EMA + Structure', ema:200, htfEma:50, useHtf:true, tol:0.25, maxRetest:20, rej:true, slAtr:0.5, rr:2, fresh:5, closed:true},
   wl:{
     binance:['BTCUSDT','ETHUSDT','SOLUSDT','BNBUSDT','XRPUSDT','ADAUSDT','DOGEUSDT','AVAXUSDT'],
     twelvedata:['EUR/USD','GBP/USD','USD/JPY','AUD/USD','USD/CAD','GBP/JPY','EUR/JPY','XAU/USD'],
@@ -898,9 +903,11 @@ try { new ResizeObserver(queueOverlay).observe($('chart')); } catch(e){}
   window.addEventListener('blur', end);
 })();
 
+let LAST_DRAW = null;
 function draw(cs, r){
+  LAST_DRAW = {cs, r};
   const n = cs.length, d = decimals(cs[n-1]?.c || 1), ms = tfOf(S.tf).ms, lastT = cs[n-1].t, px = cs[n-1].c;
-  const annot = S.p.annot !== 'forecast';
+  const annot = S.p.view === 'detailed';
   candles.applyOptions({priceFormat:{type:'price', precision:d, minMove:Math.pow(10,-d)}});
   // empty future candles give room to draw the forecast to the right of price
   const future = Array.from({length:30}, (_, k) => ({time:(lastT + (k+1)*ms)/1000}));
@@ -918,7 +925,7 @@ function draw(cs, r){
 
   const markers = [];
   // BOS / CHoCH levels
-  for (const b of r.bos.slice(-12)){
+  for (const b of r.bos.slice(annot ? -12 : -1)){
     const sr = chart.addLineSeries({color: b.dir===1 ? '#14b8a6' : '#e11d48', lineWidth:1, lineStyle:2, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false});
     sr.setData([{time:cs[b.from].t/1000, value:b.level}, {time:cs[b.to].t/1000, value:b.level}]); extraSeries.push(sr);
     markers.push({time:cs[b.to].t/1000, position:b.dir===1?'aboveBar':'belowBar', color:b.choch?'#f59e0b':'#94a3b8', shape:'circle', size:0.4, text:b.choch?'CHoCH':'BOS'});
@@ -941,13 +948,14 @@ function draw(cs, r){
       for (const z of kz.slice(-4)) markers.push({time:cs[z.k].t/1000, position:'belowBar', color:'#c084fc', shape:'square', size:0.6, text:z.lab});
     }
   }
-  for (const s of r.signals) markers.push({time:s.t/1000, position:s.dir===1?'belowBar':'aboveBar', color:s.dir===1?'#22c55e':'#ef4444',
+  for (const s of r.signals.slice(annot ? 0 : -4)) markers.push({time:s.t/1000, position:s.dir===1?'belowBar':'aboveBar', color:s.dir===1?'#22c55e':'#ef4444',
     shape:s.dir===1?'arrowUp':'arrowDown', text:(s.kind==='SMC' ? '' : s.kind==='SMC CHoCH' ? 'CHoCH ' : 'S/R ') + (s.dir===1?'BUY':'SELL')});
   markers.sort((a,b) => a.time-b.time);
 
   // S/R zones: nearest 3 above and 3 below price
   const near = r.zones.slice().sort((a,b) => Math.abs((a.zb+a.zt)/2 - px) - Math.abs((b.zb+b.zt)/2 - px));
-  for (const z of near.filter(z => z.zt < px).slice(0,3).concat(near.filter(z => z.zb >= px).slice(0,3))){
+  const zn = annot ? 3 : 1;
+  for (const z of near.filter(z => z.zt < px).slice(0,zn).concat(near.filter(z => z.zb >= px).slice(0,zn))){
     const sup = z.zt < px;
     rects.push({l0:Math.max(0, z.first), l1:END, p0:z.zb, p1:z.zt, cls: sup ? 'sup' : 'res', label:`${sup ? 'Support' : 'Resistance'} ×${z.touches}`});
   }
@@ -1019,7 +1027,7 @@ async function showTv(){
 function setTab(which){
   const tv = which === 'tv', bt = which === 'bt';
   $('tabTv').classList.toggle('on', tv); $('tabBt').classList.toggle('on', bt); $('tabSig').classList.toggle('on', !tv && !bt);
-  $('tv').style.display = tv ? 'block' : 'none'; $('bt').style.display = bt ? 'block' : 'none';
+  $('tv').style.display = tv ? 'block' : 'none'; $('bt').style.display = bt ? 'block' : 'none'; $('tvNote').style.display = tv ? 'block' : 'none';
   $('chart').style.display = tv || bt ? 'none' : 'block';
   if (tv) showTv();
 }
@@ -1260,13 +1268,16 @@ $('auto').onchange = e => { S.auto = e.target.value; save(); setAuto(); };
 $('scanBtn').onclick = scanCurrent;
 $('scanAllBtn').onclick = scanAll;
 $('wl').onclick = e => { const tr = e.target.closest('tr[data-sym]'); if (!tr) return; S.symbol[S.source] = tr.dataset.sym; save(); $('symbol').value = tr.dataset.sym; scanCurrent(); if ($('tabTv').classList.contains('on')) showTv(); };
+const viewLabel = () => { $('viewBtn').textContent = S.p.view === 'detailed' ? 'View: Detailed' : 'View: Clean'; };
+$('viewBtn').onclick = () => { S.p.view = S.p.view === 'detailed' ? 'clean' : 'detailed'; save(); viewLabel(); if (LAST_DRAW) draw(LAST_DRAW.cs, LAST_DRAW.r); };
+viewLabel();
 $('tabSig').onclick = () => setTab('sig');
 $('tabTv').onclick = () => setTab('tv');
 $('tabBt').onclick = () => setTab('bt');
 $('bt_run').onclick = runBacktest;
 
 const F = [['s_tpmulti','tpMulti',v=>v==='1'],['s_tp1r','tp1R',Number],['s_tp3mode','tp3Mode',String],['s_tp3r','tp3R',Number],
-  ['s_split','split',String],['s_be','be',v=>v==='1'],['s_annot','annot',String],['s_poi','poi',String],['s_choch','choch',v=>v==='1'],['s_disp','dispAtr',Number],['s_session','session',String],['s_minconf','minConf',Number],
+  ['s_split','split',String],['s_be','be',v=>v==='1'],['s_annot','view',String],['s_poi','poi',String],['s_choch','choch',v=>v==='1'],['s_disp','dispAtr',Number],['s_session','session',String],['s_minconf','minConf',Number],
   ['s_strategy','strategy',String],['s_srtouch','srTouches',Number],['s_zonew','zoneW',Number],['s_srlook','srLook',Number],
   ['s_srtrend','srTrend',String],['s_tpmode','tpMode',String],['s_minrr','minRR',Number],['s_swing','swing',Number],['s_trend','trend',String],['s_ema','ema',Number],['s_htfema','htfEma',Number],
   ['s_usehtf','useHtf',v=>v==='1'],['s_tol','tol',Number],['s_maxr','maxRetest',Number],['s_rej','rej',v=>v==='1'],

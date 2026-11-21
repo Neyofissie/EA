@@ -12,7 +12,7 @@
 //   4. Risk          : SL beyond the retest wick/level + ATR buffer, TP at R:R.
 //  Setup is cancelled if price closes back through the level or it times out.
 // ============================================================================
-indicator("SMC BOS + Retest [Trend]", shorttitle = "SMC BOS-R", overlay = true, max_lines_count = 500, max_labels_count = 500)
+indicator("SMC BOS + Retest [Trend]", shorttitle = "SMC BOS-R", overlay = true, max_lines_count = 100, max_labels_count = 100, max_boxes_count = 50)
 
 // ---------------- Inputs ----------------
 grpS = "Structure"
@@ -30,11 +30,15 @@ needRej    = input.bool(true, "Require rejection candle (close in trend directio
 grpK = "Risk"
 slAtr      = input.float(0.5, "SL buffer (x ATR)", minval = 0, step = 0.1, group = grpK)
 rr         = input.float(2.0, "Take-profit R:R", minval = 0.1, step = 0.1, group = grpK)
+tp1R       = input.float(1.0, "TP1 (R)", minval = 0.1, step = 0.1, group = grpK)
+tp3R       = input.float(3.0, "TP3 (R)", minval = 0.5, step = 0.5, group = grpK)
 grpV = "Display"
 showEma    = input.bool(true, "Show trend EMA", group = grpV)
-showBos    = input.bool(true, "Show BOS levels", group = grpV)
-showRisk   = input.bool(true, "Show SL / TP lines", group = grpV)
-showPanel  = input.bool(true, "Show status panel", group = grpV)
+showBos    = input.bool(true, "Show the latest BOS level", group = grpV)
+showPlan   = input.bool(true, "Show setup box (entry, SL, TP1-TP3)", group = grpV)
+showPend   = input.bool(true, "Show the setup that is waiting for a retest", group = grpV)
+boxLen     = input.int(15, "Setup box width (bars)", minval = 3, maxval = 200, group = grpV)
+showPanel  = input.bool(false, "Show status panel", group = grpV)
 
 // ---------------- Core engine (same as scanner) ----------------
 smcCore(swingLen, emaLen, trendMode, tolAtr, maxRetest, rr, slAtr, needRej) =>
@@ -159,20 +163,84 @@ buy  = sig == 1  and (not useHtf or htf == 1)
 sell = sig == -1 and (not useHtf or htf == -1)
 
 // ---------------- Drawing ----------------
-plot(showEma ? ema : na, "Trend EMA", color = trendDir == 1 ? color.teal : trendDir == -1 ? color.maroon : color.gray, linewidth = 2)
+plot(showEma ? ema : na, "Trend EMA", color = color.new(trendDir == 1 ? color.teal : trendDir == -1 ? color.maroon : color.gray, 30), linewidth = 1)
 
+// only the latest BOS level, so the chart stays clean
+var line  bosLine  = na
+var label bosLabel = na
 if showBos and bosEvt != 0
-    c = bosEvt == 1 ? color.teal : color.maroon
-    line.new(lvlBar, lvl, bar_index, lvl, color = c, style = line.style_dashed, width = 1)
-    label.new(bar_index, lvl, "BOS", style = bosEvt == 1 ? label.style_label_down : label.style_label_up, color = color.new(c, 100), textcolor = c, size = size.tiny)
+    line.delete(bosLine)
+    label.delete(bosLabel)
+    bc = bosEvt == 1 ? color.teal : color.maroon
+    bosLine  := line.new(lvlBar, lvl, bar_index, lvl, color = bc, style = line.style_dashed, width = 1)
+    bosLabel := label.new(bar_index, lvl, "BOS", style = bosEvt == 1 ? label.style_label_down : label.style_label_up, color = color.new(bc, 100), textcolor = bc, size = size.tiny)
 
-plotshape(buy,  "Buy (retest)",  shape.triangleup,   location.belowbar, color.lime, size = size.small, text = "BUY")
-plotshape(sell, "Sell (retest)", shape.triangledown, location.abovebar, color.red,  size = size.small, text = "SELL")
+plotshape(buy,  "Buy (retest)",  shape.triangleup,   location.belowbar, color.lime, size = size.tiny)
+plotshape(sell, "Sell (retest)", shape.triangledown, location.abovebar, color.red,  size = size.tiny)
 
-if showRisk and (buy or sell)
-    line.new(bar_index, sl, bar_index + 15, sl, color = color.red,  width = 2)
-    line.new(bar_index, tp, bar_index + 15, tp, color = color.lime, width = 2)
-    line.new(bar_index, close, bar_index + 15, close, color = color.gray, style = line.style_dotted)
+// TP1 / TP2 / TP3 for a trade: TP2 is the R:R target, TP1 and TP3 are R multiples around it
+tpLevels(float entry, float slv, int d) =>
+    risk = math.abs(entry - slv)
+    t2 = entry + d * rr * risk
+    t1 = entry + d * tp1R * risk
+    t1 := d * (t1 - t2) >= 0 ? entry + (t2 - entry) / 2 : t1
+    t3 = entry + d * math.max(tp3R, rr + 1) * risk
+    [t1, t2, t3]
+
+clearDrawings(array<box> bx, array<line> ln, array<label> lb) =>
+    for b in bx
+        box.delete(b)
+    for l in ln
+        line.delete(l)
+    for x in lb
+        label.delete(x)
+    array.clear(bx)
+    array.clear(ln)
+    array.clear(lb)
+
+// Position box like a long/short tool: green to TP3, red to SL, tags on the right edge
+drawSetup(int d, int x0, float entry, float slv, float t1, float t2, float t3, bool faded, string side, array<box> bx, array<line> ln, array<label> lb) =>
+    x1 = x0 + boxLen
+    fillT = faded ? 92 : 80
+    edgeT = faded ? 70 : 25
+    tagBg = color.new(color.black, faded ? 60 : 25)
+    rrTxt = str.tostring(math.abs(t3 - entry) / math.abs(entry - slv), "#.0")
+    array.push(bx, box.new(x0, math.max(entry, t3), x1, math.min(entry, t3), border_color = color.new(color.green, edgeT), bgcolor = color.new(color.green, fillT)))
+    array.push(bx, box.new(x0, math.max(entry, slv), x1, math.min(entry, slv), border_color = color.new(color.red, edgeT), bgcolor = color.new(color.red, fillT)))
+    array.push(ln, line.new(x0, t1, x1, t1, color = color.new(color.green, edgeT), style = line.style_dashed))
+    array.push(ln, line.new(x0, t2, x1, t2, color = color.new(color.green, edgeT), style = line.style_dashed))
+    array.push(ln, line.new(x0, entry, x1, entry, color = color.new(color.blue, edgeT), width = 2))
+    array.push(lb, label.new(x1, t3, "TP3 " + str.tostring(t3, format.mintick), style = label.style_label_left, color = tagBg, textcolor = color.lime, size = size.small))
+    array.push(lb, label.new(x1, t2, "TP2 " + str.tostring(t2, format.mintick), style = label.style_label_left, color = tagBg, textcolor = color.lime, size = size.small))
+    array.push(lb, label.new(x1, t1, "TP1 " + str.tostring(t1, format.mintick), style = label.style_label_left, color = tagBg, textcolor = color.lime, size = size.small))
+    array.push(lb, label.new(x1, entry, "ENTRY " + str.tostring(entry, format.mintick) + "  R:R " + rrTxt, style = label.style_label_left, color = tagBg, textcolor = color.aqua, size = size.small))
+    array.push(lb, label.new(x1, slv, "SL " + str.tostring(slv, format.mintick), style = label.style_label_left, color = tagBg, textcolor = color.red, size = size.small))
+    array.push(lb, label.new(x0, slv, side, style = d == 1 ? label.style_label_up : label.style_label_down, color = color.new(d == 1 ? color.green : color.red, faded ? 75 : 45), textcolor = color.white, size = size.small))
+
+var array<box>   sigBoxes  = array.new<box>()
+var array<line>  sigLines  = array.new<line>()
+var array<label> sigLabels = array.new<label>()
+var array<box>   pendBoxes  = array.new<box>()
+var array<line>  pendLines  = array.new<line>()
+var array<label> pendLabels = array.new<label>()
+
+// the latest signal's trade
+if showPlan and (buy or sell)
+    clearDrawings(sigBoxes, sigLines, sigLabels)
+    d = buy ? 1 : -1
+    [t1, t2, t3] = tpLevels(close, sl, d)
+    drawSetup(d, bar_index, close, sl, t1, t2, t3, false, d == 1 ? "▲ LONG" : "▼ SHORT", sigBoxes, sigLines, sigLabels)
+
+// forecast: a setup armed by a BOS and waiting for its retest (redrawn on the last bar only)
+atrNow = ta.atr(14)
+if barstate.islast
+    clearDrawings(pendBoxes, pendLines, pendLabels)
+    if showPlan and showPend and state != 0
+        d = state
+        pSl = lvl - d * (atrNow * tolAtr + atrNow * slAtr)
+        [p1, p2, p3] = tpLevels(lvl, pSl, d)
+        against = useHtf and htf != d
+        drawSetup(d, bar_index + 1, lvl, pSl, p1, p2, p3, against, (d == 1 ? "▲ LONG" : "▼ SHORT") + " · LIMIT" + (against ? " · vs HTF" : ""), pendBoxes, pendLines, pendLabels)
 
 // Hidden plots (Data Window / Pine Screener friendly): 1 buy, -1 sell, 0 none
 plot(buy ? 1 : sell ? -1 : 0, "Signal", display = display.data_window)
@@ -198,4 +266,5 @@ alertcondition(buy,  "SMC Buy (BOS retest)",  "{{ticker}} {{interval}}: SMC BUY 
 alertcondition(sell, "SMC Sell (BOS retest)", "{{ticker}} {{interval}}: SMC SELL – bearish BOS retest @ {{close}}")
 alertcondition(bosEvt != 0, "SMC BOS (setup armed)", "{{ticker}} {{interval}}: BOS with trend – watching for retest")
 if buy or sell
-    alert(syminfo.ticker + " " + timeframe.period + (buy ? " BUY" : " SELL") + " | entry " + str.tostring(close, format.mintick) + " | SL " + str.tostring(sl, format.mintick) + " | TP " + str.tostring(tp, format.mintick), alert.freq_once_per_bar_close)
+    [a1, a2, a3] = tpLevels(close, sl, buy ? 1 : -1)
+    alert(syminfo.ticker + " " + timeframe.period + (buy ? " BUY" : " SELL") + " | entry " + str.tostring(close, format.mintick) + " | SL " + str.tostring(sl, format.mintick) + " | TP1 " + str.tostring(a1, format.mintick) + " | TP2 " + str.tostring(a2, format.mintick) + " | TP3 " + str.tostring(a3, format.mintick), alert.freq_once_per_bar_close)
