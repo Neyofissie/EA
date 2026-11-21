@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SMC BOS Scanner</title>
+<title>SMC + S/R Scanner</title>
 <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
 <style>
 :root{
@@ -76,7 +76,12 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 </head>
 <body>
 <header>
-  <h1>SMC BOS + Retest Scanner</h1>
+  <h1>SMC + S/R Scanner</h1>
+  <select id="strategy" title="Strategy">
+    <option value="smc">SMC: BOS + retest</option>
+    <option value="sr">Support &amp; Resistance</option>
+    <option value="both">Both strategies</option>
+  </select>
   <select id="source" title="Data source">
     <option value="binance">Crypto (Binance)</option>
     <option value="twelvedata">Forex / Gold / Indices (Twelve Data)</option>
@@ -154,7 +159,14 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
   <div class="form">
     <label class="full">Twelve Data API key (free at twelvedata.com — needed for forex/gold; stays in this browser)
       <input id="s_tdkey" type="password" autocomplete="off"></label>
+    <label>Strategy<select id="s_strategy"><option value="smc">SMC: BOS + retest</option><option value="sr">Support &amp; Resistance</option><option value="both">Both strategies</option></select></label>
     <label>Swing length (bars each side)<input id="s_swing" type="number" min="1"></label>
+    <label>S/R: min touches for a zone<input id="s_srtouch" type="number" min="1"></label>
+    <label>S/R: zone width (× ATR)<input id="s_zonew" type="number" step="0.05" min="0.05"></label>
+    <label>S/R: forget zones after N candles<input id="s_srlook" type="number" min="20"></label>
+    <label>S/R: trade direction<select id="s_srtrend"><option value="trend">With the trend only</option><option value="any">Both directions</option></select></label>
+    <label>S/R: take profit<select id="s_tpmode"><option value="zone">Next S/R level</option><option value="rr">Fixed R:R</option></select></label>
+    <label>S/R: min room to next level (R)<input id="s_minrr" type="number" step="0.1" min="0.5"></label>
     <label>Trend filter
       <select id="s_trend"><option>EMA + Structure</option><option>EMA</option><option>Structure</option><option>None</option></select></label>
     <label>Trend EMA length<input id="s_ema" type="number" min="2"></label>
@@ -195,7 +207,7 @@ const tfOf = k => TFS.find(t => t.k === k);
 const DEFAULTS = {
   source:'binance', symbol:{binance:'BTCUSDT', twelvedata:'EUR/USD', demo:'DEMO-1'},
   tf:'15m', htf:'4h', auto:'0', tdkey:'',
-  p:{swing:5, trend:'EMA + Structure', ema:200, htfEma:50, useHtf:true, tol:0.25, maxRetest:20, rej:true, slAtr:0.5, rr:2, fresh:5, closed:true},
+  p:{strategy:'smc', srTouches:2, zoneW:0.5, srLook:300, tpMode:'zone', minRR:1.5, srTrend:'trend', swing:5, trend:'EMA + Structure', ema:200, htfEma:50, useHtf:true, tol:0.25, maxRetest:20, rej:true, slAtr:0.5, rr:2, fresh:5, closed:true},
   wl:{
     binance:['BTCUSDT','ETHUSDT','SOLUSDT','BNBUSDT','XRPUSDT','ADAUSDT','DOGEUSDT','AVAXUSDT'],
     twelvedata:['EUR/USD','GBP/USD','USD/JPY','AUD/USD','USD/CAD','GBP/JPY','EUR/JPY','XAU/USD'],
@@ -305,7 +317,7 @@ function analyze(cs, p, htfBias){
   let lastH=null, prevH=null, lastHIdx=null, hBroken=true;
   let lastL=null, prevL=null, lastLIdx=null, lBroken=true;
   let state=0, lvl=null, lvlIdx=null, bosIdx=null, trendDir=0;
-  const bos=[], signals=[];
+  const bos=[], signals=[], trendArr=new Array(n).fill(0);
   for (let i = 0; i < n; i++){
     const c = cs[i];
     // pivot confirmed now at j = i-L
@@ -324,6 +336,7 @@ function analyze(cs, p, htfBias){
     const tUp = p.trend==='EMA' ? eUp : p.trend==='Structure' ? sUp : p.trend==='EMA + Structure' ? eUp&&sUp : true;
     const tDn = p.trend==='EMA' ? eDn : p.trend==='Structure' ? sDn : p.trend==='EMA + Structure' ? eDn&&sDn : true;
     trendDir = tUp && !tDn ? 1 : tDn && !tUp ? -1 : 0;
+    trendArr[i] = trendDir;
     const tol = atr[i]*p.tol;
 
     // pending retest
@@ -352,8 +365,12 @@ function analyze(cs, p, htfBias){
       if (tDn){ state=-1; lvl=lastL; lvlIdx=lastLIdx; bosIdx=i; bos.push({from:lastLIdx, to:i, level:lastL, dir:-1}); }
     }
   }
+  const useSmc = p.strategy !== 'sr', useSr = p.strategy !== 'smc';
+  const sr = useSr ? srScan(cs, p, atr, trendArr, htfBias) : {zones:[], signals:[], plan:null};
   const ok = s => !p.useHtf || s.htf === s.dir;
-  const good = signals.filter(ok);
+  const good = (useSmc ? signals.map(s => ({...s, kind:'SMC'})) : []).concat(sr.signals)
+    .filter(ok).sort((a,b) => a.i - b.i);
+  for (const s of good) s.rWin = Math.abs(s.tp - s.entry) / Math.abs(s.entry - s.sl);
   const last = good[good.length-1] || null;
 
   // Outcome of every past signal: which was hit first, SL or TP (same candle counts as SL)
@@ -371,30 +388,118 @@ function analyze(cs, p, htfBias){
   const wins = closedT.filter(s => s.outcome === 'win').length;
   const stats = {trades:closedT.length, wins,
     winRate: closedT.length ? wins/closedT.length : null,
-    avgR: closedT.length ? (wins*p.rr - (closedT.length-wins))/closedT.length : null};
+    avgR: closedT.length ? closedT.reduce((a,s) => a + (s.outcome==='win' ? s.rWin : -1), 0)/closedT.length : null};
 
   // Forecast: the trade the strategy is set up to take next
   const a = atr[n-1], tolN = a*p.tol, buf = a*p.slAtr, htfNow = htfBias[n-1] || 0, close = cs[n-1].c;
   const mk = (dir, type, entry, extra) => {
     const sl = dir===1 ? entry - tolN - buf : entry + tolN + buf;
-    return {dir, type, entry, sl, tp: entry + dir*p.rr*Math.abs(entry - sl), tol: tolN,
+    return {dir, type, kind:'smc', entry, sl, tp: entry + dir*p.rr*Math.abs(entry - sl), tol: tolN,
       htfOk: !p.useHtf || htfNow === dir, ...extra};
   };
   let plan = null;
   if (last && last.outcome === 'open' && n-1-last.i <= 50)
-    plan = {dir:last.dir, type:'active', entry:last.entry, sl:last.sl, tp:last.tp, htfOk:true, ago:n-1-last.i};
-  else if (state !== 0)
+    plan = {dir:last.dir, type:'active', kind:last.kind, entry:last.entry, sl:last.sl, tp:last.tp, htfOk:true, ago:n-1-last.i};
+  else if (useSmc && state !== 0)
     plan = mk(state, 'limit', lvl, {invalid: lvl - state*tolN, barsLeft: Math.max(0, p.maxRetest - (n-1-bosIdx)), bosT: cs[bosIdx].t});
+  else if (sr.plan)
+    plan = sr.plan;
+  else if (!useSmc) plan = null;
   else if (trendDir === 1 && !hBroken && lastH !== null && lastH > close)
     plan = mk(1, 'watch', lastH, {trigger:lastH});
   else if (trendDir === -1 && !lBroken && lastL !== null && lastL < close)
     plan = mk(-1, 'watch', lastL, {trigger:lastL});
 
   return {
-    ema, bos, signals:good, trendDir, state, level:state ? lvl : null,
+    ema, bos: useSmc ? bos : [], zones: sr.zones, signals:good, trendDir, state: useSmc ? state : 0, level:state ? lvl : null,
     pendingBars: state ? n-1-bosIdx : null, htf: htfNow,
     last, lastAgo: last ? n-1-last.i : null, price: close, plan, stats,
   };
+}
+
+// ---------- Support & Resistance ----------
+// Zones are built from confirmed swing points (a pivot at j is only known at j+swing),
+// so nothing here looks into the future.
+function srScan(cs, p, atr, trendArr, htfBias){
+  const n = cs.length, L = p.swing, signals = [];
+  let zones = [];
+  const allowed = (dir, i) => p.srTrend === 'any' || trendArr[i] === dir;
+  const band = (z, i) => { const pad = atr[i]*p.zoneW/2; return [Math.min(z.bot, z.mid - pad), Math.max(z.top, z.mid + pad)]; };
+  const strong = z => z.touches >= p.srTouches;
+  // TP: fixed R:R, or the next strong zone if it leaves at least minRR of room (else no trade)
+  const target = (dir, entry, risk, i, self) => {
+    if (p.tpMode !== 'zone') return entry + dir*p.rr*risk;
+    let best = null;
+    for (const z of zones){
+      if (z === self || !strong(z)) continue;
+      const [b, t] = band(z, i), lvl = dir === 1 ? b : t;
+      if ((dir === 1 ? lvl > entry : lvl < entry) && (best === null || Math.abs(lvl-entry) < Math.abs(best-entry))) best = lvl;
+    }
+    if (best === null) return entry + dir*p.rr*risk;
+    return Math.abs(best - entry) >= p.minRR*risk ? best : null;
+  };
+  const addPivot = (price, j, i) => {
+    const w = atr[i]*p.zoneW;
+    let best = null, bd = Infinity;
+    for (const z of zones){ const d = Math.abs(price - z.mid); if (d <= w && d < bd){ best = z; bd = d; } }
+    if (best && Math.max(best.top, price) - Math.min(best.bot, price) <= 2*w){
+      best.top = Math.max(best.top, price); best.bot = Math.min(best.bot, price);
+      best.mid = (best.top + best.bot)/2; best.touches++; best.last = j;
+    } else zones.push({top:price, bot:price, mid:price, touches:1, first:j, last:j, lastSig:-1e9, brokeUp:null, brokeDn:null});
+  };
+  for (let i = 1; i < n; i++){
+    const j = i - L;
+    if (j >= L){
+      let isH = true, isL = true;
+      for (let k = j-L; k <= j+L; k++){ if (k === j) continue;
+        if (cs[k].h >= cs[j].h) isH = false;
+        if (cs[k].l <= cs[j].l) isL = false; }
+      if (isH) addPivot(cs[j].h, j, i);
+      if (isL) addPivot(cs[j].l, j, i);
+    }
+    zones = zones.filter(z => i - z.last <= p.srLook);
+    const c = cs[i], pc = cs[i-1];
+    for (const z of zones){
+      if (!strong(z)) continue;
+      const [zb, zt] = band(z, i);
+      if (pc.c <= zt && c.c > zt) z.brokeUp = i;
+      if (pc.c >= zb && c.c < zb) z.brokeDn = i;
+      if (i - z.lastSig <= 2*L) continue;
+      // bounce off support (or old resistance retested as support)
+      if (pc.c > zt && c.l <= zt && c.c > zt && c.c > c.o && allowed(1, i)){
+        const sl = Math.min(c.l, zb) - p.slAtr*atr[i], tp = target(1, c.c, c.c - sl, i, z);
+        if (tp !== null){
+          signals.push({i, t:c.t, dir:1, entry:c.c, sl, tp, level:zt, htf:htfBias[i],
+            kind: z.brokeUp !== null && i - z.brokeUp <= p.maxRetest ? 'S/R flip' : 'S/R bounce'});
+          z.lastSig = i;
+        }
+      // rejection at resistance (or old support retested as resistance)
+      } else if (pc.c < zb && c.h >= zb && c.c < zb && c.c < c.o && allowed(-1, i)){
+        const sl = Math.max(c.h, zt) + p.slAtr*atr[i], tp = target(-1, c.c, sl - c.c, i, z);
+        if (tp !== null){
+          signals.push({i, t:c.t, dir:-1, entry:c.c, sl, tp, level:zb, htf:htfBias[i],
+            kind: z.brokeDn !== null && i - z.brokeDn <= p.maxRetest ? 'S/R flip' : 'S/R bounce'});
+          z.lastSig = i;
+        }
+      }
+    }
+  }
+  // Forecast: nearest strong zone in an allowed direction, within 5 ATR of price
+  const i = n-1, close = cs[i].c, htfNow = htfBias[i] || 0;
+  let plan = null;
+  for (const z of zones){
+    if (!strong(z)) continue;
+    const [zb, zt] = band(z, i), cands = [];
+    if (zt < close && close - zt <= 5*atr[i] && allowed(1, i)) cands.push({dir:1, entry:zt, sl:zb - p.slAtr*atr[i], invalid:zb, dist:close - zt});
+    if (zb > close && zb - close <= 5*atr[i] && allowed(-1, i)) cands.push({dir:-1, entry:zb, sl:zt + p.slAtr*atr[i], invalid:zt, dist:zb - close});
+    for (const c of cands){
+      const tp = target(c.dir, c.entry, Math.abs(c.entry - c.sl), i, z);
+      if (tp === null || (plan && plan.dist <= c.dist)) continue;
+      plan = {...c, tp, type:'limit', kind:'sr', zb, zt, touches:z.touches, tol:0, htfOk: !p.useHtf || htfNow === c.dir};
+    }
+  }
+  const out = zones.filter(strong).map(z => { const [zb, zt] = band(z, i); return {zb, zt, touches:z.touches, first:z.first}; });
+  return {zones: out, signals, plan};
 }
 
 async function loadAndAnalyze(source, symbol, tfKey, htfKey, n, closedOnly){
@@ -424,7 +529,7 @@ function statusHtml(r){
   const side = p.dir===1 ? 'Buy' : 'Sell';
   const cls = !p.htfOk ? 'neu' : p.type==='active' ? (p.dir===1?'up':'down') : p.type==='limit' ? 'warn' : 'neu';
   const txt = p.type==='active' ? `${side.toUpperCase()} active · ${p.ago} bars`
-    : p.type==='limit' ? `${side} limit ${fmt(p.entry)}` : `Watch break ${fmt(p.trigger)}`;
+    : p.type==='limit' ? `${side} limit ${fmt(p.entry)}${p.kind==='sr' ? ' (S/R)' : ''}` : `Watch break ${fmt(p.trigger)}`;
   return `<span class="pill ${cls}">${txt}${p.htfOk ? '' : ' · vs HTF'}</span>`;
 }
 const pct = x => x==null ? '–' : Math.round(x*100) + '%';
@@ -436,9 +541,12 @@ function forecastHtml(r){
   if (!p) return `<div>Setup</div><div class="muted">Nothing forming. Trend is not clear enough on ${tf}.</div>
     <div>Track record</div><div>${record}</div>`;
   const side = p.dir===1 ? 'BUY' : 'SELL', up = p.dir===1;
-  const label = p.type==='active' ? 'Trade running' : p.type==='limit' ? 'Limit order · waiting for retest' : 'Possible · waiting for break';
+  const label = p.type==='active' ? `Trade running · ${p.kind || 'SMC'}`
+    : p.kind==='sr' ? `Limit order at ${up ? 'support' : 'resistance'}`
+    : p.type==='limit' ? 'Limit order · waiting for retest' : 'Possible · waiting for break';
   let cond;
   if (p.type==='active') cond = `Signal fired ${p.ago} candles ago. Neither SL nor TP has been hit yet.`;
+  else if (p.kind==='sr') cond = `${up?'Support':'Resistance'} zone ${fmt(p.zb)} – ${fmt(p.zt)}, touched ${p.touches} times. ${up?'Buy':'Sell'} when price ${up?'dips':'rises'} into the zone and a ${up?'bullish':'bearish'} candle closes back ${up?'above':'below'} ${fmt(p.entry)}. Skip it if a candle closes ${up?'below':'above'} ${fmt(p.invalid)}.`;
   else if (p.type==='limit') cond = `Structure broke at ${fmt(p.entry)}. Enter when price pulls back into ${fmt(p.entry - p.tol)} – ${fmt(p.entry + p.tol)} and a ${up?'bullish':'bearish'} candle closes back ${up?'above':'below'} it. Cancel on a close ${up?'below':'above'} ${fmt(p.invalid)} or after ${p.barsLeft} more candles.`;
   else cond = `Trend is ${up?'up':'down'}. If a ${tf} candle closes ${up?'above':'below'} ${fmt(p.trigger)}, wait for a pull-back to that level and enter there.`;
   if (!p.htfOk) cond += ` <b>HTF (${S.htf}) points the other way, so the scanner will not signal this one.</b>`;
@@ -485,7 +593,19 @@ function draw(cs, r){
   }
   const markers = [];
   for (const b of r.bos.slice(-40)) markers.push({time:cs[b.to].t/1000, position:b.dir===1?'aboveBar':'belowBar', color:'#94a3b8', shape:'circle', size:0.4, text:'BOS'});
-  for (const s of r.signals) markers.push({time:s.t/1000, position:s.dir===1?'belowBar':'aboveBar', color:s.dir===1?'#22c55e':'#ef4444', shape:s.dir===1?'arrowUp':'arrowDown', text:s.dir===1?'BUY':'SELL'});
+  for (const s of r.signals) markers.push({time:s.t/1000, position:s.dir===1?'belowBar':'aboveBar', color:s.dir===1?'#22c55e':'#ef4444', shape:s.dir===1?'arrowUp':'arrowDown', text:(s.kind==='SMC' ? '' : 'S/R ') + (s.dir===1?'BUY':'SELL')});
+  // S/R zones: nearest 4 above and 4 below price, drawn as bands from first touch to the right edge
+  const px = cs[cs.length-1].c;
+  const near = r.zones.slice().sort((a,b) => Math.abs((a.zb+a.zt)/2 - px) - Math.abs((b.zb+b.zt)/2 - px));
+  const pick = near.filter(z => z.zt < px).slice(0,4).concat(near.filter(z => z.zb >= px).slice(0,4));
+  for (const z of pick){
+    const col = z.zt < px ? '#22c55e' : '#ef4444', t0 = cs[Math.max(0, z.first)].t/1000, t1 = (lastT + 30*ms)/1000;
+    for (const v of [z.zb, z.zt]){
+      const sz = chart.addLineSeries({color: col + '88', lineWidth:1, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false});
+      sz.setData([{time:t0, value:v}, {time:t1, value:v}]); extraSeries.push(sz);
+    }
+    priceLines.push(candles.createPriceLine({price:(z.zb+z.zt)/2, color:col + '33', lineWidth:4, lineStyle:0, axisLabelVisible:true, title:`${z.zt < px ? 'S' : 'R'} ×${z.touches}`}));
+  }
   markers.sort((a,b) => a.time-b.time);
   candles.setMarkers(markers);
 
@@ -591,7 +711,7 @@ async function runBacktest(){
         if (s.i < p.ema) continue; // skip EMA warm-up period
         if (s.outcome === 'open'){ open++; continue; }
         tr.push({sym, dir:s.dir, t:s.t, exitT:cs[s.exitI].t, entry:s.entry, sl:s.sl, tp:s.tp, outcome:s.outcome,
-          R:(s.outcome === 'win' ? p.rr : -1) - cost, bars:s.exitI - s.i});
+          kind:s.kind, R:(s.outcome === 'win' ? s.rWin : -1) - cost, bars:s.exitI - s.i});
       }
       all.push(...tr); per.push({sym, candles:cs.length, ...btStats(tr.slice())});
     } catch(e){ errs.push(`${sym}: ${e.message}`); }
@@ -612,10 +732,12 @@ async function runBacktest(){
       ${tile('Buys won', st.longs.n ? `${st.longs.w}/${st.longs.n}` : '–')}
       ${tile('Sells won', st.shorts.n ? `${st.shorts.w}/${st.shorts.n}` : '–')}
       ${tile('Avg time in trade', st.avgBars.toFixed(0) + ' candles')}
+      ${['SMC','S/R bounce','S/R flip'].map(k => { const x = all.filter(t => t.kind === k); if (!x.length || p.strategy === 'smc') return '';
+        const net = x.reduce((a,t) => a + t.R, 0); return tile(`${k}: won ${x.filter(t => t.outcome==='win').length}/${x.length}`, sgn(net) + 'R', net >= 0 ? 'good' : 'bad'); }).join('')}
     </div>
-    <p class="muted" style="margin:0">At 1:${p.rr} R:R with ${cost}R costs you need a win rate above ${pct(be)} to make money.
+    <p class="muted" style="margin:0">${p.strategy==='sr' && p.tpMode==='zone' ? 'Targets are the next S/R level, so reward varies per trade.' : `At 1:${p.rr} R:R with ${cost}R costs you need a win rate above ${pct(be)} to make money.`}
       ${open ? `${open} trade${open>1?'s':''} still open at the end were left out.` : ''}
-      Return is simple (not compounded). Settings: ${esc(p.trend)} trend, HTF ${p.useHtf ? S.htf : 'off'}, swing ${p.swing}, tolerance ${p.tol}×ATR, SL buffer ${p.slAtr}×ATR.</p>
+      Return is simple (not compounded). Strategy: ${STRAT[p.strategy]}. Settings: ${esc(p.trend)} trend, HTF ${p.useHtf ? S.htf : 'off'}, swing ${p.swing}, tolerance ${p.tol}×ATR, SL buffer ${p.slAtr}×ATR.</p>
     ${errs.length ? `<p class="bad">${errs.map(esc).join('<br>')}</p>` : ''}
     ${S.source==='demo' ? '<p class="bad" style="margin:8px 0 0"><b>Demo data is made up and much trendier than real markets. Ignore these numbers and switch to Binance or Twelve Data for a real test.</b></p>' : ''}`;
 
@@ -643,8 +765,8 @@ async function runBacktest(){
     </tbody></table></div>` : '';
   const list = all.slice().sort((a,b) => b.t - a.t).slice(0, 300);
   $('bt_tables').innerHTML = perRows + (list.length ? `<h3>Trades (newest first${all.length > 300 ? ', last 300' : ''})</h3><div class="tscroll"><table>
-    <thead><tr><th>Time</th>${per.length > 1 ? '<th>Pair</th>' : ''}<th>Side</th><th>Entry</th><th>SL</th><th>TP</th><th>Result</th><th>R</th><th>Candles</th></tr></thead><tbody>
-    ${list.map(t => `<tr><td>${fmtTime(t.t)}</td>${per.length > 1 ? `<td>${esc(t.sym)}</td>` : ''}
+    <thead><tr><th>Time</th>${per.length > 1 ? '<th>Pair</th>' : ''}<th>Type</th><th>Side</th><th>Entry</th><th>SL</th><th>TP</th><th>Result</th><th>R</th><th>Candles</th></tr></thead><tbody>
+    ${list.map(t => `<tr><td>${fmtTime(t.t)}</td>${per.length > 1 ? `<td>${esc(t.sym)}</td>` : ''}<td class="muted">${t.kind}</td>
       <td><span class="pill ${t.dir===1?'up':'down'}">${t.dir===1?'BUY':'SELL'}</span></td>
       <td>${fmt(t.entry)}</td><td>${fmt(t.sl)}</td><td>${fmt(t.tp)}</td>
       <td>${t.outcome==='win' ? '<span class="pill up">TP</span>' : '<span class="pill down">SL</span>'}</td>
@@ -655,6 +777,7 @@ async function runBacktest(){
 
 // ======================= UI wiring =======================
 const curSymbol = () => S.symbol[S.source] || '';
+const STRAT = {smc:'SMC BOS + retest', sr:'Support & Resistance', both:'SMC + S/R'};
 function setStatus(t){ $('status').textContent = t; }
 function toast(msg){
   const d = document.createElement('div'); d.textContent = msg; $('toast').appendChild(d);
@@ -663,6 +786,7 @@ function toast(msg){
 
 function renderHeader(){
   $('source').value = S.source;
+  $('strategy').value = S.p.strategy;
   $('symbol').value = curSymbol();
   $('symlist').innerHTML = (S.wl[S.source]||[]).map(s => `<option value="${esc(s)}">`).join('');
   $('tfs').innerHTML = TFS.map(t => `<button data-tf="${t.k}" class="${t.k===S.tf?'on':''}">${t.k}</button>`).join('');
@@ -690,7 +814,7 @@ async function scanCurrent(){
       <div>Stop loss</div><div style="color:var(--down)">${fmt(r.last.sl)}</div>
       <div>Take profit</div><div style="color:var(--up)">${fmt(r.last.tp)}</div>` : '<div>Last signal</div><div class="muted">None in loaded history</div>'}`;
     $('hist').innerHTML = r.signals.slice().reverse().map(s => `<tr><td>${fmtTime(s.t)}</td>
-      <td><span class="pill ${s.dir===1?'up':'down'}">${s.dir===1?'BUY':'SELL'}</span></td>
+      <td><span class="pill ${s.dir===1?'up':'down'}">${s.dir===1?'BUY':'SELL'}</span> <span class="muted">${s.kind}</span></td>
       <td>${fmt(s.entry)}</td><td>${fmt(s.sl)}</td><td>${fmt(s.tp)}</td>
       <td>${s.outcome==='win' ? '<span class="pill up">TP hit</span>' : s.outcome==='loss' ? '<span class="pill down">SL hit</span>' : '<span class="pill warn">Open</span>'}</td></tr>`).join('') || '<tr><td colspan="6" class="muted">No signals in loaded history</td></tr>';
     checkNew(S.source, sym, S.tf, r);
@@ -736,7 +860,7 @@ function checkNew(source, sym, tf, r){
     try { if (Notification.permission === 'granted') new Notification('SMC signal', {body:msg}); } catch(e){}
   }
   seen[key] = Math.max(seen[key]||0, t);
-  const p = r.plan, sk = key + '|setup', bt = p && p.type==='limit' && p.htfOk ? p.bosT : 0;
+  const p = r.plan, sk = key + '|setup', bt = p && p.type==='limit' && p.htfOk && p.bosT ? p.bosT : 0;
   if (sk in seen && bt > seen[sk]){
     const msg = `${sym} ${tf}: ${p.dir===1?'BUY':'SELL'} setup forming. Limit ~${fmt(p.entry)} · SL ${fmt(p.sl)} · TP ${fmt(p.tp)}`;
     toast(msg); beep();
@@ -760,6 +884,7 @@ function setAuto(){
 $('source').onchange = e => { S.source = e.target.value; save(); renderHeader(); scanCurrent(); if ($('tabTv').classList.contains('on')) showTv(); };
 $('symbol').onchange = e => { S.symbol[S.source] = e.target.value.trim(); save(); scanCurrent(); if ($('tabTv').classList.contains('on')) showTv(); };
 $('tfs').onclick = e => { const tf = e.target.dataset.tf; if (!tf) return; S.tf = tf; save(); renderHeader(); scanCurrent(); if ($('tabTv').classList.contains('on')) showTv(); };
+$('strategy').onchange = e => { S.p.strategy = e.target.value; save(); for (const k in wlResults) delete wlResults[k]; renderWatchlist(); scanCurrent(); };
 $('htf').onchange = e => { S.htf = e.target.value; save(); renderWatchlist(); scanCurrent(); };
 $('auto').onchange = e => { S.auto = e.target.value; save(); setAuto(); };
 $('scanBtn').onclick = scanCurrent;
@@ -770,7 +895,8 @@ $('tabTv').onclick = () => setTab('tv');
 $('tabBt').onclick = () => setTab('bt');
 $('bt_run').onclick = runBacktest;
 
-const F = [['s_swing','swing',Number],['s_trend','trend',String],['s_ema','ema',Number],['s_htfema','htfEma',Number],
+const F = [['s_strategy','strategy',String],['s_srtouch','srTouches',Number],['s_zonew','zoneW',Number],['s_srlook','srLook',Number],
+  ['s_srtrend','srTrend',String],['s_tpmode','tpMode',String],['s_minrr','minRR',Number],['s_swing','swing',Number],['s_trend','trend',String],['s_ema','ema',Number],['s_htfema','htfEma',Number],
   ['s_usehtf','useHtf',v=>v==='1'],['s_tol','tol',Number],['s_maxr','maxRetest',Number],['s_rej','rej',v=>v==='1'],
   ['s_sl','slAtr',Number],['s_rr','rr',Number],['s_fresh','fresh',Number],['s_closed','closed',v=>v==='1']];
 $('settingsBtn').onclick = () => {

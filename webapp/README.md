@@ -25,3 +25,12 @@ A single-page app. It loads live candles, runs the SMC trend + break of structur
 Open the **Backtest** tab and pick *This chart* or *Whole watchlist*. Choose 1,000–5,000 candles and set costs per trade (in R) and risk per trade, then press **Run backtest**.
 The backtest replays the same rules over past closed candles and checks which was hit first, SL or TP (SL wins ties on the same candle). It reports trades, win rate, profit factor, net R and %, max drawdown, the longest losing run, an equity curve, a per-pair breakdown and every trade.
 Demo data is synthetic and very trendy, so use Binance or Twelve Data for real results. Checked for look-ahead bias: on pure random-walk data the strategy wins about 31% at 1:2 (break-even is 33%).
+
+## Support & Resistance strategy
+Pick **Support & Resistance** (or **Both strategies**) in the selector at the top left.
+- **Zones:** confirmed swing highs and lows that land within `zone width × ATR` of each other are grouped into one zone. A zone counts once it has been touched at least *min touches* times (default 2). Zones not touched for *N* candles are dropped.
+- **Bounce:** price dips into a support zone and a bullish candle closes back above it → BUY. Resistance mirrors this → SELL.
+- **Flip:** a zone that price recently broke through and then retested from the other side (old resistance as new support) is labelled *S/R flip*.
+- **Stop loss** goes beyond the zone (or the candle's wick) plus the SL buffer. **Take profit** is the next S/R level, or a fixed R:R. With *next level*, a trade is skipped when there is less than *min room* (default 1.5R) to that level.
+- **Trend:** by default trades are only taken with the trend, and with the HTF bias when that is turned on.
+- **On the chart:** the nearest zones are drawn with their touch count (S ×3 / R ×2). The forecast shows the nearest tradeable zone as a limit order. The backtest splits results into SMC / S/R bounce / S/R flip.
