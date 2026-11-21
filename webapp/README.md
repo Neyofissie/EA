@@ -20,3 +20,8 @@ A single-page app. It loads live candles, runs the SMC trend + break of structur
 2. **Scan all** checks your watchlist. Click a row to load that symbol on the chart.
 3. Set **Auto** to re-scan every 1/5/15 min. Enable notifications in Settings to get a popup and a sound on each new signal. The tab has to stay open.
 4. All strategy settings (swing length, trend filter, retest tolerance, SL buffer, R:R) are under **Settings**.
+
+## Backtest
+Open the **Backtest** tab and pick *This chart* or *Whole watchlist*. Choose 1,000–5,000 candles and set costs per trade (in R) and risk per trade, then press **Run backtest**.
+The backtest replays the same rules over past closed candles and checks which was hit first, SL or TP (SL wins ties on the same candle). It reports trades, win rate, profit factor, net R and %, max drawdown, the longest losing run, an equity curve, a per-pair breakdown and every trade.
+Demo data is synthetic and very trendy, so use Binance or Twelve Data for real results. Checked for look-ahead bias: on pure random-walk data the strategy wins about 31% at 1:2 (break-even is 33%).
