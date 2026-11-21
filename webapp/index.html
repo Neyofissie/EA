@@ -85,6 +85,8 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 .ovt{position:absolute;font-size:12px;font-weight:800;letter-spacing:.02em;padding:2px 7px;border-radius:5px;white-space:nowrap;
   background:rgba(13,16,23,.88);font-variant-numeric:tabular-nums}
 .ovt.tp{color:#4ade80;transform:translate(-4px,-115%)}
+.ovt.tpn{color:#4ade80;font-size:11px;transform:translate(-4px,-50%)}
+.ovr.tpline{border-top:1px dashed rgba(74,222,128,.75);height:0!important;background:none}
 .ovt.sl{color:#f87171;transform:translate(-4px,15%)}
 .ovt.sl.up{transform:translate(-4px,-115%)}
 .ovt.entry{color:#60a5fa;transform:translate(-4px,-50%)}
@@ -194,6 +196,14 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
       <input id="s_tdkey" type="password" autocomplete="off"></label>
     <label>Strategy<select id="s_strategy"><option value="smc">SMC: BOS + retest</option><option value="sr">Support &amp; Resistance</option><option value="both">Both strategies</option></select></label>
     <label>Swing length (bars each side)<input id="s_swing" type="number" min="1"></label>
+    <div class="full" style="border-top:1px solid var(--line);padding-top:10px;color:var(--text);font-weight:600">Take profits</div>
+    <label>Take profit<select id="s_tpmulti"><option value="1">TP1 · TP2 · TP3 (partial exits)</option><option value="0">Single TP</option></select></label>
+    <label>TP1 at (R)<input id="s_tp1r" type="number" step="0.1" min="0.2"></label>
+    <label>TP3<select id="s_tp3mode"><option value="liq">Next liquidity (swing high / low)</option><option value="rr">Fixed R multiple</option></select></label>
+    <label>TP3 fallback / fixed (R)<input id="s_tp3r" type="number" step="0.5" min="1"></label>
+    <label>Close at TP1 / TP2 / TP3 (%)<input id="s_split" type="text" placeholder="50/30/20"></label>
+    <label>After TP1, move SL to entry<select id="s_be"><option value="1">Yes</option><option value="0">No</option></select></label>
+    <div class="full muted" style="font-size:12px">TP2 is the strategy's target: the R:R setting for SMC, or the next S/R level for S/R trades.</div>
     <label>Chart labels<select id="s_annot"><option value="all">Swings, liquidity, kill zones</option><option value="forecast">Forecast only</option></select></label>
     <div class="full" style="border-top:1px solid var(--line);padding-top:10px;color:var(--text);font-weight:600">SMC confluences</div>
     <label>Entry zone (POI)<select id="s_poi"><option value="level">Broken level (BOS retest)</option><option value="ob">Order block</option><option value="fvg">Fair value gap</option><option value="any">Any: level, OB or FVG</option></select></label>
@@ -254,12 +264,20 @@ const TFS = [
 ];
 const tfOf = k => TFS.find(t => t.k === k);
 const CONF_KEYS = ['OB','FVG','Sweep','Displacement','Discount','Killzone'];
+// "50/30/20" -> [0.5, 0.3, 0.2]; anything unreadable falls back to that split
+function splitOf(str){
+  const v = String(str || '').split(/[\/,\s]+/).map(Number).filter(x => x >= 0).slice(0, 3);
+  while (v.length < 3) v.push(0);
+  const sum = v[0] + v[1] + v[2];
+  return sum > 0 ? v.map(x => x/sum) : [0.5, 0.3, 0.2];
+}
+const tpList = (tps, hits=0) => tps.map((v, k) => `TP${k+1} ${fmt(v)}${k < hits ? ' ✓' : ''}`).join(' · ');
 const CONF_LABEL = {OB:'Order block', FVG:'Fair value gap', Sweep:'Liquidity sweep', Displacement:'Displacement', Discount:'Premium / discount', Killzone:'Kill zone'};
 
 const DEFAULTS = {
   source:'binance', symbol:{binance:'BTCUSDT', twelvedata:'EUR/USD', demo:'DEMO-1'},
   tf:'15m', htf:'4h', auto:'0', tdkey:'',
-  p:{annot:'all', poi:'level', choch:false, dispAtr:1.0, session:'both', minConf:0, req:[], strategy:'smc', srTouches:2, zoneW:0.5, srLook:300, tpMode:'zone', minRR:1.5, srTrend:'trend', swing:5, trend:'EMA + Structure', ema:200, htfEma:50, useHtf:true, tol:0.25, maxRetest:20, rej:true, slAtr:0.5, rr:2, fresh:5, closed:true},
+  p:{tpMulti:true, tp1R:1, tp3Mode:'liq', tp3R:3, split:'50/30/20', be:true, annot:'all', poi:'level', choch:false, dispAtr:1.0, session:'both', minConf:0, req:[], strategy:'smc', srTouches:2, zoneW:0.5, srLook:300, tpMode:'zone', minRR:1.5, srTrend:'trend', swing:5, trend:'EMA + Structure', ema:200, htfEma:50, useHtf:true, tol:0.25, maxRetest:20, rej:true, slAtr:0.5, rr:2, fresh:5, closed:true},
   wl:{
     binance:['BTCUSDT','ETHUSDT','SOLUSDT','BNBUSDT','XRPUSDT','ADAUSDT','DOGEUSDT','AVAXUSDT'],
     twelvedata:['EUR/USD','GBP/USD','USD/JPY','AUD/USD','USD/CAD','GBP/JPY','EUR/JPY','XAU/USD'],
@@ -495,22 +513,58 @@ function analyze(cs, p, htfBias){
   for (const s of good) s.rWin = Math.abs(s.tp - s.entry) / Math.abs(s.entry - s.sl);
   const last = good[good.length-1] || null;
 
-  // Outcome of every past signal: which was hit first, SL or TP (same candle counts as SL)
+  // TP1 / TP2 / TP3. TP2 is the strategy's own target; TP3 is the nearest untaken swing (resting liquidity)
+  // beyond TP2 that was already confirmed at bar i, else a fixed R multiple.
+  const tpLevels = (entry, sl, d, base, i) => {
+    if (!p.tpMulti) return [base, base, base];
+    const risk = Math.abs(entry - sl), t2 = base;
+    let t1 = entry + d*p.tp1R*risk;
+    if (d*(t1 - t2) >= 0) t1 = entry + (t2 - entry)/2;
+    let t3 = null, liq = false;
+    if (p.tp3Mode === 'liq'){
+      for (let k = pivots.length-1; k >= 0; k--){
+        const v = pivots[k];
+        if (v.j + L > i || v.hi !== (d === 1)) continue;
+        if (i - v.j > 400) break;
+        const price = d === 1 ? cs[v.j].h : cs[v.j].l;
+        if (d*(price - t2) <= 0 || (t3 !== null && d*(price - t3) >= 0)) continue;
+        let taken = false;
+        for (let m = v.j+1; m <= i; m++) if (d === 1 ? cs[m].h > price : cs[m].l < price){ taken = true; break; }
+        if (!taken) t3 = price;
+      }
+    }
+    if (t3 !== null && Math.abs(t3 - entry) <= 8*risk) liq = true;
+    else t3 = entry + d*Math.max(p.tp3R, Math.abs(t2 - entry)/risk + 1)*risk;
+    const out = [t1, t2, t3]; out.liq = liq;
+    return out;
+  };
+  const parts = p.tpMulti ? splitOf(p.split) : [1, 0, 0];
+  // Walk forward candle by candle: stop first (conservative), then TPs in order; after TP1 the stop can move to break-even
   for (const s of good){
+    s.tps = tpLevels(s.entry, s.sl, s.dir, s.tp, s.i);
+    const d = s.dir, risk = Math.abs(s.entry - s.sl), tps = p.tpMulti ? s.tps : [s.tp, s.tp, s.tp];
+    let stop = s.sl, rem = 1, R = 0, hits = 0;
     s.outcome = 'open';
     for (let k = s.i+1; k < n; k++){
       const c = cs[k];
-      const hitSL = s.dir===1 ? c.l <= s.sl : c.h >= s.sl;
-      const hitTP = s.dir===1 ? c.h >= s.tp : c.l <= s.tp;
-      if (hitSL){ s.outcome = 'loss'; s.exitI = k; break; }
-      if (hitTP){ s.outcome = 'win'; s.exitI = k; break; }
+      if (d===1 ? c.l <= stop : c.h >= stop){ R += rem*d*(stop - s.entry)/risk; rem = 0; s.exitI = k; break; }
+      while (hits < 3 && (d===1 ? c.h >= tps[hits] : c.l <= tps[hits])){
+        R += parts[hits]*Math.abs(tps[hits] - s.entry)/risk; rem -= parts[hits]; hits++;
+        if (hits === 1 && p.be && p.tpMulti) stop = s.entry;
+      }
+      if (rem <= 1e-9){ s.exitI = k; break; }
     }
+    s.hits = hits;
+    if (rem <= 1e-9){ s.R = R; s.outcome = hits >= 1 ? 'win' : 'loss'; }
+    else { s.R = null; }
   }
   const closedT = good.filter(s => s.outcome !== 'open');
   const wins = closedT.filter(s => s.outcome === 'win').length;
   const stats = {trades:closedT.length, wins,
     winRate: closedT.length ? wins/closedT.length : null,
-    avgR: closedT.length ? closedT.reduce((a,s) => a + (s.outcome==='win' ? s.rWin : -1), 0)/closedT.length : null};
+    tp2: closedT.length ? closedT.filter(s => s.hits >= 2).length/closedT.length : null,
+    tp3: closedT.length ? closedT.filter(s => s.hits >= 3).length/closedT.length : null,
+    avgR: closedT.length ? closedT.reduce((a,s) => a + s.R, 0)/closedT.length : null};
 
   // Forecast: the trade the strategy is set up to take next
   const a = atr[n-1], tolN = a*p.tol, buf = a*p.slAtr, htfNow = htfBias[n-1] || 0, close = cs[n-1].c;
@@ -521,7 +575,7 @@ function analyze(cs, p, htfBias){
   };
   let plan = null;
   if (last && last.outcome === 'open' && n-1-last.i <= 50)
-    plan = {dir:last.dir, type:'active', kind:last.kind, entry:last.entry, sl:last.sl, tp:last.tp, htfOk:true, ago:n-1-last.i};
+    plan = {dir:last.dir, type:'active', kind:last.kind, entry:last.entry, sl:last.sl, tp:last.tp, tps:last.tps, hits:last.hits, htfOk:true, ago:n-1-last.i};
   else if (useSmc && pend){
     const d = pend.dir, zs = zonesOf(pend, tolN);
     const first = zs.slice().sort((a,b) => d===1 ? b.top - a.top : a.bot - b.bot)[0]; // shallowest zone is hit first
@@ -543,6 +597,9 @@ function analyze(cs, p, htfBias){
     plan = mk(1, 'watch', lastH, {trigger:lastH});
   else if (trendDir === -1 && !lBroken && lastL !== null && lastL < close)
     plan = mk(-1, 'watch', lastL, {trigger:lastL});
+
+  if (plan && !plan.tps) plan.tps = tpLevels(plan.entry, plan.sl, plan.dir, plan.tp, n-1);
+  if (plan && plan.hits === undefined) plan.hits = 0;
 
   return {
     ema, bos: useSmc ? bos : [], zones: sr.zones, pivots, sweeps, signals:good, trendDir, state: useSmc && pend ? pend.dir : 0,
@@ -673,7 +730,7 @@ const confTags = s => !s.conf ? '' : `<span class="muted" title="${CONF_KEYS.map
 function forecastHtml(r){
   const p = r.plan, st = r.stats, tf = S.tf;
   const record = st.trades >= 3
-    ? `${st.wins} of ${st.trades} past setups hit TP (${pct(st.winRate)}) · average ${st.avgR >= 0 ? '+' : ''}${st.avgR.toFixed(2)}R per trade`
+    ? `${st.wins} of ${st.trades} past setups hit ${S.p.tpMulti ? 'TP1' : 'TP'} (${pct(st.winRate)})${S.p.tpMulti ? `, TP2 ${pct(st.tp2)}, TP3 ${pct(st.tp3)}` : ''} · average ${st.avgR >= 0 ? '+' : ''}${st.avgR.toFixed(2)}R per trade`
     : `Only ${st.trades} finished setup${st.trades===1?'':'s'} in loaded history, too few to judge`;
   if (!p) return `<div>Setup</div><div class="muted">Nothing forming. Trend is not clear enough on ${tf}.</div>
     <div>Track record</div><div>${record}</div>`;
@@ -683,13 +740,16 @@ function forecastHtml(r){
     : p.kind==='sr' ? `Limit order at ${up ? 'support' : 'resistance'}`
     : p.type==='limit' ? 'Limit order · waiting for retest' : 'Possible · waiting for break';
   let cond;
-  if (p.type==='active') cond = `Signal fired ${p.ago} candles ago. Neither SL nor TP has been hit yet.`;
+  if (p.type==='active') cond = p.hits
+    ? `Signal fired ${p.ago} candles ago. TP${p.hits} hit${S.p.be ? ', stop moved to entry (break-even)' : ''}. The rest is still running.`
+    : `Signal fired ${p.ago} candles ago. Neither SL nor TP has been hit yet.`;
   else if (p.kind==='sr') cond = `${up?'Support':'Resistance'} zone ${fmt(p.zb)} – ${fmt(p.zt)}, touched ${p.touches} times. ${up?'Buy':'Sell'} when price ${up?'dips':'rises'} into the zone and a ${up?'bullish':'bearish'} candle closes back ${up?'above':'below'} ${fmt(p.entry)}. Skip it if a candle closes ${up?'below':'above'} ${fmt(p.invalid)}.`;
   else if (p.type==='limit' && p.poi && p.poi !== 'Level') cond = `Structure broke. Enter when price pulls back into the ${p.poi==='OB' ? 'order block' : 'fair value gap'} (${fmt(p.entry)} side first) and a ${up?'bullish':'bearish'} candle closes back ${up?'above':'below'} its middle. Cancel on a close ${up?'below':'above'} ${fmt(p.invalid)} or after ${p.barsLeft} more candles.`;
   else if (p.type==='limit') cond = `Structure broke at ${fmt(p.entry)}. Enter when price pulls back into ${fmt(p.entry - p.tol)} – ${fmt(p.entry + p.tol)}${S.p.poi==='any' ? ' (or deeper, in the fair value gap or order block)' : ''} and a ${up?'bullish':'bearish'} candle closes back ${up?'above':'below'} it. Cancel on a close ${up?'below':'above'} ${fmt(p.invalid)} or after ${p.barsLeft} more candles.`;
   else cond = `Trend is ${up?'up':'down'}. If a ${tf} candle closes ${up?'above':'below'} ${fmt(p.trigger)}, wait for a pull-back to that level and enter there.`;
   if (!p.htfOk) cond += ` <b>HTF (${S.htf}) points the other way, so the scanner will not signal this one.</b>`;
-  const risk = Math.abs(p.entry - p.sl), reward = Math.abs(p.tp - p.entry), dist = v => v.toFixed(decimals(p.entry));
+  const risk = Math.abs(p.entry - p.sl), reward = Math.abs(p.tps[2] - p.entry), dist = v => v.toFixed(decimals(p.entry));
+  const sp = splitOf(S.p.split);
   let confRow = '';
   if (p.kind === 'smc' && p.known){
     const yes = (ok, txt) => `<div>${ok ? '<span class="good">✓</span>' : '<span class="bad">✗</span>'} ${txt}</div>`;
@@ -712,7 +772,9 @@ function forecastHtml(r){
     <div>Setup</div><div><span class="pill ${!p.htfOk ? 'neu' : up ? 'up' : 'down'}">${side}</span> ${label}</div>
     <div>Entry${p.type==='active' ? '' : ' (approx.)'}</div><div class="big">${fmt(p.entry)}</div>
     <div>Stop loss</div><div style="color:var(--down)">${fmt(p.sl)} <span class="muted">(${dist(risk)} away)</span></div>
-    <div>Take profit</div><div style="color:var(--up)">${fmt(p.tp)} <span class="muted">(${dist(reward)} away)</span></div>
+    ${S.p.tpMulti ? p.tps.map((v, k) => `<div>TP${k+1}${k < p.hits ? ' ✓' : ''}</div><div style="color:var(--up)">${fmt(v)}
+      <span class="muted">(${(Math.abs(v - p.entry)/risk).toFixed(1)}R · close ${Math.round(sp[k]*100)}%${k === 0 && S.p.be ? ', then SL to entry' : ''}${k === 2 && p.tps.liq ? ' · resting liquidity' : ''})</span></div>`).join('')
+      : `<div>Take profit</div><div style="color:var(--up)">${fmt(p.tp)} <span class="muted">(${dist(Math.abs(p.tp - p.entry))} away)</span></div>`}
     <div>Risk : reward</div><div>1 : ${(reward/risk).toFixed(1)}</div>
     <div>Condition</div><div>${cond}</div>
     ${confRow}
@@ -836,20 +898,26 @@ function draw(cs, r){
     if (p.kind === 'smc' && p.fvg) rects.push({l0:p.fvg.idx, l1:END, p0:p.fvg.bot, p1:p.fvg.top, cls:'fvg lab-left' + fade, label:'FVG'});
     // position box, like a broker's long/short tool
     const l0 = p.type === 'active' ? n-1-p.ago : n, l1 = Math.max(l0, n) + 10;
-    rects.push({l0, l1, p0:p.entry, p1:p.tp, cls:'tpbox' + fade});
+    const T3 = p.tps[2];
+    rects.push({l0, l1, p0:p.entry, p1:T3, cls:'tpbox' + fade});
+    if (S.p.tpMulti) for (const v of [p.tps[0], p.tps[1]]) rects.push({l0, l1, p0:v, p1:v, cls:'tpline' + fade});
     rects.push({l0, l1, p0:p.entry, p1:p.sl, cls:'slbox' + fade});
     rects.push({l0:Math.max(0, n-60), l1:l0, p0:p.entry, p1:p.entry, cls:'entryln' + fade});
-    const rr = Math.abs(p.tp - p.entry) / Math.abs(p.entry - p.sl);
+    const rr = Math.abs(T3 - p.entry) / Math.abs(p.entry - p.sl);
     const narrow = innerWidth < 700;
     const state = p.type === 'active' || narrow ? '' : p.type === 'limit' ? ' · LIMIT' : ' · IF BREAK';
-    tags.push({l:l0, p:p.tp, cls:'tp' + fade, text:`TP ${fmt(p.tp)}`});
+    if (S.p.tpMulti){
+      tags.push({l:l0, p:T3, cls:'tp' + fade, text:`TP3 ${fmt(T3)}${p.hits >= 3 ? ' ✓' : ''}`});
+      tags.push({l:l0, p:p.tps[1], cls:'tpn' + fade, text:`TP2 ${fmt(p.tps[1])}${p.hits >= 2 ? ' ✓' : ''}`});
+      tags.push({l:l0, p:p.tps[0], cls:'tpn' + fade, text:`TP1 ${fmt(p.tps[0])}${p.hits >= 1 ? ' ✓' : ''}`});
+    } else tags.push({l:l0, p:p.tp, cls:'tp' + fade, text:`TP ${fmt(p.tp)}`});
     tags.push({l:l0, p:p.entry, cls:'entry' + fade, text:`ENTRY ${fmt(p.entry)}`});
-    tags.push({l:l0, p:p.sl, cls:'sl' + (up ? '' : ' up') + fade, text:`SL ${fmt(p.sl)}`});
+    tags.push({l:l0, p:p.sl, cls:'sl' + (up ? '' : ' up') + fade, text:`SL ${fmt(p.sl)}${p.hits && S.p.be && S.p.tpMulti ? ' → BE' : ''}`});
     tags.push({l:l0, p:p.sl, cls:'side' + (up ? '' : ' short') + fade, text:(up ? '▲ LONG' : '▼ SHORT') + state});
     tags.push({l:l1, p:p.entry, cls:'rr' + fade, text:`R:R ${rr.toFixed(1)}`});
-    if (r.stats.trades >= 3) tags.push({l:Math.round((l0 + l1)/2), p:p.tp, cls:'conf' + (up ? '' : ' short') + fade, text:pct(r.stats.winRate),
-      title:`${r.stats.wins} of ${r.stats.trades} past setups on this chart hit TP`});
-    planRange = {min: Math.min(p.sl, p.tp, p.entry), max: Math.max(p.sl, p.tp, p.entry)};
+    if (r.stats.trades >= 3) tags.push({l:Math.round((l0 + l1)/2), p:T3, cls:'conf' + (up ? '' : ' short') + fade, text:pct(r.stats.winRate),
+      title:`${r.stats.wins} of ${r.stats.trades} past setups on this chart hit ${S.p.tpMulti ? 'TP1' : 'TP'}`});
+    planRange = {min: Math.min(p.sl, T3, p.entry), max: Math.max(p.sl, T3, p.entry)};
     priceLines.push(candles.createPriceLine({price:p.entry, color:'#60a5fa', lineWidth:1, lineStyle:3, axisLabelVisible:true, title:''}));
   }
   candles.setData(cs.map(c => ({time:c.t/1000, open:c.o, high:c.h, low:c.l, close:c.c})).concat(future));
@@ -908,7 +976,8 @@ function btStats(trades){
   }
   const n = trades.length, wins = trades.filter(t => t.outcome === 'win').length;
   const side = d => { const x = trades.filter(t => t.dir === d); return {n:x.length, w:x.filter(t => t.outcome==='win').length}; };
-  return {n, wins, winRate: n ? wins/n : 0, pf: gl ? gw/gl : (gw ? Infinity : 0), net:eq, avg: n ? eq/n : 0, dd, maxStreak,
+  const tp2 = trades.filter(t => t.hits >= 2).length, tp3 = trades.filter(t => t.hits >= 3).length;
+  return {n, wins, tp2Rate: n ? tp2/n : 0, tp3Rate: n ? tp3/n : 0, winRate: n ? wins/n : 0, pf: gl ? gw/gl : (gw ? Infinity : 0), net:eq, avg: n ? eq/n : 0, dd, maxStreak,
     avgBars: n ? bars/n : 0, longs:side(1), shorts:side(-1), curve:[...curve].map(([time, value]) => ({time, value}))};
 }
 const sgn = v => (v >= 0 ? '+' : '') + v.toFixed(2);
@@ -932,7 +1001,7 @@ async function runBacktest(){
         if (s.i < p.ema) continue; // skip EMA warm-up period
         if (s.outcome === 'open'){ open++; continue; }
         tr.push({sym, dir:s.dir, t:s.t, exitT:cs[s.exitI].t, entry:s.entry, sl:s.sl, tp:s.tp, outcome:s.outcome,
-          kind:s.kind, conf:s.conf, score:s.score, R:(s.outcome === 'win' ? s.rWin : -1) - cost, bars:s.exitI - s.i});
+          kind:s.kind, conf:s.conf, score:s.score, hits:s.hits, R:s.R - cost, bars:s.exitI - s.i});
       }
       all.push(...tr); per.push({sym, candles:cs.length, ...btStats(tr.slice())});
     } catch(e){ errs.push(`${sym}: ${e.message}`); }
@@ -943,7 +1012,8 @@ async function runBacktest(){
   $('bt_sum').innerHTML = !st.n ? `<p class="muted">No finished trades in this history. Try more candles, another timeframe, or looser settings.</p>${errs.length ? `<p class="bad">${errs.map(esc).join('<br>')}</p>` : ''}` : `
     <div class="tiles">
       ${tile('Trades', st.n)}
-      ${tile('Win rate', pct(st.winRate), st.winRate >= be ? 'good' : 'bad')}
+      ${p.tpMulti ? tile('TP1 hit', pct(st.winRate)) + tile('TP2 hit', pct(st.tp2Rate)) + tile('TP3 hit', pct(st.tp3Rate))
+        : tile('Win rate', pct(st.winRate), st.winRate >= be ? 'good' : 'bad')}
       ${tile('Profit factor', pfTxt(st.pf), st.pf >= 1 ? 'good' : 'bad')}
       ${tile('Net result', sgn(st.net) + 'R', st.net >= 0 ? 'good' : 'bad')}
       ${tile(`Return at ${risk}% risk`, sgn(st.net*risk) + '%', st.net >= 0 ? 'good' : 'bad')}
@@ -956,7 +1026,7 @@ async function runBacktest(){
       ${['SMC','S/R bounce','S/R flip'].map(k => { const x = all.filter(t => t.kind === k); if (!x.length || p.strategy === 'smc') return '';
         const net = x.reduce((a,t) => a + t.R, 0); return tile(`${k}: won ${x.filter(t => t.outcome==='win').length}/${x.length}`, sgn(net) + 'R', net >= 0 ? 'good' : 'bad'); }).join('')}
     </div>
-    <p class="muted" style="margin:0">${p.strategy==='sr' && p.tpMode==='zone' ? 'Targets are the next S/R level, so reward varies per trade.' : `At 1:${p.rr} R:R with ${cost}R costs you need a win rate above ${pct(be)} to make money.`}
+    <p class="muted" style="margin:0">${p.tpMulti ? `Exits: ${p.split} at TP1 (${p.tp1R}R) / TP2 (strategy target) / TP3 (${p.tp3Mode === 'liq' ? 'next liquidity, else ' + p.tp3R + 'R' : p.tp3R + 'R'})${p.be ? ', stop to break-even after TP1' : ''}. A trade counts as a win once TP1 is hit.` : p.strategy==='sr' && p.tpMode==='zone' ? 'Targets are the next S/R level, so reward varies per trade.' : `At 1:${p.rr} R:R with ${cost}R costs you need a win rate above ${pct(be)} to make money.`}
       ${open ? `${open} trade${open>1?'s':''} still open at the end were left out.` : ''}
       Return is simple (not compounded). Strategy: ${STRAT[p.strategy]}. SMC entry zone: ${p.poi}${p.choch ? ' + CHoCH' : ''}, min confluence ${p.minConf}${(p.req||[]).length ? ', required: ' + p.req.join(', ') : ''}. Settings: ${esc(p.trend)} trend, HTF ${p.useHtf ? S.htf : 'off'}, swing ${p.swing}, tolerance ${p.tol}×ATR, SL buffer ${p.slAtr}×ATR.</p>
     ${errs.length ? `<p class="bad">${errs.map(esc).join('<br>')}</p>` : ''}
@@ -1001,7 +1071,7 @@ async function runBacktest(){
     ${list.map(t => `<tr><td>${fmtTime(t.t)}</td>${per.length > 1 ? `<td>${esc(t.sym)}</td>` : ''}<td class="muted">${t.kind}${t.conf ? '<br>' + confTags(t) : ''}</td>
       <td><span class="pill ${t.dir===1?'up':'down'}">${t.dir===1?'BUY':'SELL'}</span></td>
       <td>${fmt(t.entry)}</td><td>${fmt(t.sl)}</td><td>${fmt(t.tp)}</td>
-      <td>${t.outcome==='win' ? '<span class="pill up">TP</span>' : '<span class="pill down">SL</span>'}</td>
+      <td>${t.hits ? `<span class="pill up">TP${p.tpMulti ? t.hits : ''}</span>` : '<span class="pill down">SL</span>'}</td>
       <td class="${t.R >= 0 ? 'good' : 'bad'}">${sgn(t.R)}</td><td>${t.bars}</td></tr>`).join('')}
     </tbody></table></div>` : '');
   btRunning = false;
@@ -1044,11 +1114,13 @@ async function scanCurrent(){
       ${r.last ? `<div>Last signal</div><div><span class="pill ${r.last.dir===1?'up':'down'}">${r.last.dir===1?'BUY':'SELL'}</span> ${r.lastAgo} bars ago</div>
       <div>Entry</div><div>${fmt(r.last.entry)}</div>
       <div>Stop loss</div><div style="color:var(--down)">${fmt(r.last.sl)}</div>
-      <div>Take profit</div><div style="color:var(--up)">${fmt(r.last.tp)}</div>` : '<div>Last signal</div><div class="muted">None in loaded history</div>'}`;
+      <div>Take profit</div><div style="color:var(--up)">${S.p.tpMulti ? tpList(r.last.tps, r.last.hits) : fmt(r.last.tp)}</div>` : '<div>Last signal</div><div class="muted">None in loaded history</div>'}`;
     $('hist').innerHTML = r.signals.slice().reverse().map(s => `<tr><td>${fmtTime(s.t)}</td>
       <td><span class="pill ${s.dir===1?'up':'down'}">${s.dir===1?'BUY':'SELL'}</span> <span class="muted">${s.kind}</span>${s.conf ? '<br>' + confTags(s) : ''}</td>
-      <td>${fmt(s.entry)}</td><td>${fmt(s.sl)}</td><td>${fmt(s.tp)}</td>
-      <td>${s.outcome==='win' ? '<span class="pill up">TP hit</span>' : s.outcome==='loss' ? '<span class="pill down">SL hit</span>' : '<span class="pill warn">Open</span>'}</td></tr>`).join('') || '<tr><td colspan="6" class="muted">No signals in loaded history</td></tr>';
+      <td>${fmt(s.entry)}</td><td>${fmt(s.sl)}</td><td>${S.p.tpMulti ? s.tps.map(fmt).join('<br>') : fmt(s.tp)}</td>
+      <td>${s.outcome==='open' ? `<span class="pill warn">Open${s.hits ? ' · TP' + s.hits + ' ✓' : ''}</span>`
+        : s.hits ? `<span class="pill up">${S.p.tpMulti ? 'TP' + s.hits : 'TP'} hit</span>` : `<span class="pill down">${s.R > -0.01 && s.R < 0.01 ? 'BE' : 'SL hit'}</span>`}
+        ${s.R !== null ? `<br><span class="${s.R >= 0 ? 'good' : 'bad'}">${sgn(s.R)}R</span>` : ''}</td></tr>`).join('') || '<tr><td colspan="6" class="muted">No signals in loaded history</td></tr>';
     checkNew(S.source, sym, S.tf, r);
     setStatus(`Updated ${new Date().toLocaleTimeString()} · ${cs.length} candles`);
   } catch(e){ setStatus('Error'); $('cur').innerHTML = `<div>Error</div><div style="color:var(--down)">${esc(e.message)}</div>`; }
@@ -1087,14 +1159,14 @@ function checkNew(source, sym, tf, r){
   const key = [source, sym, tf].join('|');
   const t = r.last ? r.last.t : 0;
   if (key in seen && t > seen[key] && r.lastAgo <= 1){
-    const msg = `${sym} ${tf}: ${r.last.dir===1?'BUY':'SELL'} @ ${fmt(r.last.entry)} · SL ${fmt(r.last.sl)} · TP ${fmt(r.last.tp)}`;
+    const msg = `${sym} ${tf}: ${r.last.dir===1?'BUY':'SELL'} @ ${fmt(r.last.entry)} · SL ${fmt(r.last.sl)} · ${S.p.tpMulti ? tpList(r.last.tps) : 'TP ' + fmt(r.last.tp)}`;
     toast(msg); beep();
     try { if (Notification.permission === 'granted') new Notification('SMC signal', {body:msg}); } catch(e){}
   }
   seen[key] = Math.max(seen[key]||0, t);
   const p = r.plan, sk = key + '|setup', bt = p && p.type==='limit' && p.htfOk && p.bosT ? p.bosT : 0;
   if (sk in seen && bt > seen[sk]){
-    const msg = `${sym} ${tf}: ${p.dir===1?'BUY':'SELL'} setup forming. Limit ~${fmt(p.entry)} · SL ${fmt(p.sl)} · TP ${fmt(p.tp)}`;
+    const msg = `${sym} ${tf}: ${p.dir===1?'BUY':'SELL'} setup forming. Limit ~${fmt(p.entry)} · SL ${fmt(p.sl)} · ${S.p.tpMulti ? tpList(p.tps) : 'TP ' + fmt(p.tp)}`;
     toast(msg); beep();
     try { if (Notification.permission === 'granted') new Notification('SMC setup forming', {body:msg}); } catch(e){}
   }
@@ -1127,7 +1199,8 @@ $('tabTv').onclick = () => setTab('tv');
 $('tabBt').onclick = () => setTab('bt');
 $('bt_run').onclick = runBacktest;
 
-const F = [['s_annot','annot',String],['s_poi','poi',String],['s_choch','choch',v=>v==='1'],['s_disp','dispAtr',Number],['s_session','session',String],['s_minconf','minConf',Number],
+const F = [['s_tpmulti','tpMulti',v=>v==='1'],['s_tp1r','tp1R',Number],['s_tp3mode','tp3Mode',String],['s_tp3r','tp3R',Number],
+  ['s_split','split',String],['s_be','be',v=>v==='1'],['s_annot','annot',String],['s_poi','poi',String],['s_choch','choch',v=>v==='1'],['s_disp','dispAtr',Number],['s_session','session',String],['s_minconf','minConf',Number],
   ['s_strategy','strategy',String],['s_srtouch','srTouches',Number],['s_zonew','zoneW',Number],['s_srlook','srLook',Number],
   ['s_srtrend','srTrend',String],['s_tpmode','tpMode',String],['s_minrr','minRR',Number],['s_swing','swing',Number],['s_trend','trend',String],['s_ema','ema',Number],['s_htfema','htfEma',Number],
   ['s_usehtf','useHtf',v=>v==='1'],['s_tol','tol',Number],['s_maxr','maxRetest',Number],['s_rej','rej',v=>v==='1'],

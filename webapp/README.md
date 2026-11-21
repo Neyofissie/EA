@@ -59,3 +59,12 @@ The forecast is drawn as a position box to the right of price, the way a broker'
 - **Zones:** shaded rectangles labelled *Demand / Supply Order Block*, *FVG*, *Support ×n*, *Resistance ×n*.
 - **Chart labels** (Settings → Chart labels): HH / HL / LH / LL swing points, **BSL / SSL** liquidity sweeps (a wick through a swing that closes back inside), and **LO / NY / LC KZ** kill zone starts (London open 07, New York 12, London close 15 UTC).
 - **Faded box:** the forecast goes against the HTF bias, so the scanner won't signal it.
+
+## TP1 / TP2 / TP3 (partial exits)
+Settings → **Take profits** (on by default; switch to *Single TP* for the old behaviour):
+- **TP1:** at *N*R (default 1R). Close 50%, then (optionally) move the stop to entry.
+- **TP2:** the strategy's own target (the R:R setting for SMC, the next S/R level for S/R). Close 30%.
+- **TP3:** the nearest **untaken swing high/low beyond TP2** (resting liquidity, only swings already confirmed at the signal). If there is none within 8R, it uses a fixed R multiple (default 3R). Close 20%.
+- **Split:** change it with e.g. `40/40/20`.
+
+The backtest simulates the partial exits candle by candle. The stop is checked first on every candle, so a candle touching both SL and TP counts against you. It reports TP1 / TP2 / TP3 hit rates and the real R per trade. In single-TP mode the results are identical to before.
