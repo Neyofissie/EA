@@ -365,11 +365,19 @@ let S = load();
 const $ = id => document.getElementById(id);
 
 // ======================= Data sources =======================
-const lastReq = {};
-async function throttle(src, gapMs){
-  const now = Date.now(), wait = Math.max(0, (lastReq[src]||0) + gapMs - now);
-  lastReq[src] = now + wait;
-  if (wait) await new Promise(r => setTimeout(r, wait));
+// Request queue per data source. Requests for the chart you are looking at jump ahead of the watchlist / backtest.
+const RQ = {};
+let chartScanSym = null;
+function throttle(src, gapMs, high){
+  const q = RQ[src] || (RQ[src] = {last:0, items:[], timer:null});
+  return new Promise(res => { high ? q.items.unshift(res) : q.items.push(res); pumpQueue(src, gapMs); });
+}
+function pumpQueue(src, gapMs){
+  const q = RQ[src];
+  if (q.timer || !q.items.length) return;
+  const wait = Math.max(0, q.last + gapMs - Date.now());
+  if (wait > 1500 && chartScanSym && src === 'twelvedata') setStatus(`Waiting ${Math.ceil(wait/1000)} s for Twelve Data's free-plan limit (8 requests a minute)…`);
+  q.timer = setTimeout(() => { q.timer = null; q.last = Date.now(); const r = q.items.shift(); r(); pumpQueue(src, gapMs); }, wait);
 }
 const cache = new Map(); // key -> {at, data}
 
@@ -389,18 +397,18 @@ async function getCandles(source, symbol, tfKey, limit=1000){
     data = []; let end = null;
     while (data.length < limit){
       const want = Math.min(1000, limit - data.length);
-      await throttle('binance', 150);
+      await throttle('binance', 150, symbol === chartScanSym);
       const url = `https://data-api.binance.vision/api/v3/klines?symbol=${encodeURIComponent(symbol.toUpperCase())}&interval=${tf.bin}&limit=${want}` + (end ? `&endTime=${end}` : '');
       const r = await fetch(url);
       if (!r.ok) throw new Error(`Binance ${r.status}: ${(await r.text()).slice(0,120)}`);
-      const batch = (await r.json()).map(k => ({t:k[0], o:+k[1], h:+k[2], l:+k[3], c:+k[4]}));
+      const batch = (await r.json()).map(k => ({t:+k[0], o:+k[1], h:+k[2], l:+k[3], c:+k[4]}));
       if (!batch.length) break;
       data = batch.concat(data); end = batch[0].t - 1;
       if (batch.length < want) break;
     }
   } else if (source === 'twelvedata'){
     if (!S.tdkey) throw new Error('Add your free Twelve Data API key in Settings to scan forex/gold.');
-    await throttle('twelvedata', 8000); // free plan: 8 requests / minute
+    await throttle('twelvedata', 8000, symbol === chartScanSym); // free plan: 8 requests / minute
     const url = `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(symbol)}&interval=${tf.td}&outputsize=${Math.min(limit,5000)}&timezone=UTC&order=ASC&apikey=${encodeURIComponent(S.tdkey)}`;
     const j = await (await fetch(url)).json();
     if (j.status === 'error' || !j.values) throw new Error(`Twelve Data: ${j.message || 'no data'}`);
@@ -1426,8 +1434,24 @@ function renderHeader(){
   renderWatchlist();
 }
 
+// Turns network / API failures into a message that says what to do
+function friendlyError(e, sym){
+  const m = String(e && e.message || e);
+  if (/Failed to fetch|NetworkError|Load failed/i.test(m))
+    return `Could not reach the ${S.source === 'binance' ? 'Binance' : 'Twelve Data'} server. Check your internet connection${S.source === 'binance' ? ', or switch to Twelve Data (Binance data is blocked in some countries)' : ''}.`;
+  if (/Binance 400/.test(m)) return `Binance doesn't know the symbol "${sym}". Use the format BTCUSDT.`;
+  if (/run out of API credits|credits/i.test(m)) return 'Twelve Data limit reached (8 a minute / 800 a day on the free plan). Wait a minute, or scan fewer pairs.';
+  if (/symbol.*(not found|invalid)|invalid.*symbol|\*\*symbol\*\*/i.test(m)) return `Twelve Data doesn't know "${sym}". Use the format EUR/USD or XAU/USD.`;
+  if (/apikey|api key/i.test(m)) return 'Twelve Data rejected the API key. Check it in Settings.';
+  return m;
+}
+let scanning = false;
 async function scanCurrent(){
-  const sym = curSymbol().trim(); if (!sym) return;
+  const sym = curSymbol().trim();
+  if (!sym){ toast('Type a symbol first, e.g. BTCUSDT or EUR/USD.'); return; }
+  if (scanning) return;
+  scanning = true; chartScanSym = sym;
+  const btn = $('scanBtn'); btn.disabled = true; btn.textContent = 'Scanning…';
   $('curSym').textContent = $('fcSym').textContent = `${sym} · ${S.tf}`;
   setStatus(`Scanning ${sym}…`);
   try {
@@ -1456,7 +1480,15 @@ async function scanCurrent(){
     LAST_SWING[brokerSymbol(sym)] = {lo: r.loAt[r.loAt.length-1], hi: r.hiAt[r.hiAt.length-1]};
     checkNew(S.source, sym, S.tf, r);
     setStatus(`Updated ${new Date().toLocaleTimeString()} · ${cs.length} candles`);
-  } catch(e){ setStatus('Error'); $('cur').innerHTML = `<div>Error</div><div style="color:var(--down)">${esc(e.message)}</div>`; }
+  } catch(e){
+    const msg = friendlyError(e, sym);
+    setStatus('Scan failed');
+    $('cur').innerHTML = `<div>Error</div><div style="color:var(--down)">${esc(msg)}</div>`;
+    legendEl.innerHTML = `<span class="chip" style="color:var(--down);max-width:min(560px,80vw);white-space:normal">${esc(msg)}</span>`;
+    toast(msg);
+  } finally {
+    scanning = false; chartScanSym = null; btn.disabled = false; btn.textContent = 'Scan chart';
+  }
 }
 
 const wlResults = {};
