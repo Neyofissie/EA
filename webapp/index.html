@@ -129,6 +129,8 @@ button:disabled{opacity:.7;cursor:progress}
 @keyframes spin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){#scanBtn.busy .ico{animation:none}}
 .mobonly,.bnav,.fcmini{display:none}
+.fitbtn{position:absolute;top:8px;z-index:5;padding:4px 10px;font-size:12px;font-weight:600;border-radius:999px;min-height:0;
+  background:rgba(13,16,23,.88);border:1px solid var(--accent);color:#93c5fd}
 .fcact{grid-column:1/-1;display:flex;gap:8px;flex-wrap:wrap;padding-bottom:4px;border-bottom:1px solid var(--line);margin-bottom:2px;padding-bottom:12px}
 .fcact button{flex:1 1 auto}
 button.mini{padding:3px 8px;font-size:12px;min-height:0}
@@ -1238,6 +1240,21 @@ const queueOverlay = () => { if (ovQueued) return; ovQueued = true; requestAnima
 chart.timeScale().subscribeVisibleLogicalRangeChange(queueOverlay);
 chart.subscribeCrosshairMove(queueOverlay);
 try { new ResizeObserver(queueOverlay).observe($('chart')); } catch(e){}
+// Auto-fit: the price axis follows the visible candles. Dragging turns it off; the button (or a new pair / timeframe) turns it back on.
+const fitBtn = document.createElement('button');
+fitBtn.type = 'button'; fitBtn.className = 'fitbtn'; fitBtn.hidden = true; fitBtn.textContent = 'Auto-fit';
+fitBtn.title = 'Fit the price axis to the candles again';
+$('chart').appendChild(fitBtn);
+function setAutoFit(on){
+  const cur = candles.priceScale().options().autoScale;
+  if (cur === on) return;
+  candles.priceScale().applyOptions({autoScale: on});
+  fitBtn.hidden = on;
+  fitBtn.style.right = (chart.priceScale('right').width() + 8) + 'px';
+  queueOverlay();
+}
+fitBtn.onclick = () => setAutoFit(true);
+fitBtn.addEventListener('pointerdown', e => e.stopPropagation());
 // Hand tool: while the mouse is held down on the price pane, show a grabbing hand and hide the crosshair
 (() => {
   const el = $('chart');
@@ -1245,18 +1262,24 @@ try { new ResizeObserver(queueOverlay).observe($('chart')); } catch(e){}
     return e.clientX - r.left < ts.width() && e.clientY - r.top < el.clientHeight - ts.height(); };
   const setCross = on => chart.applyOptions({crosshair:{vertLine:{visible:on}, horzLine:{visible:on}}});
   el.addEventListener('pointerdown', e => {
-    if (e.pointerType !== 'mouse' || e.button !== 0 || !inPane(e)) return;
+    if ((e.pointerType === 'mouse' && e.button !== 0) || !inPane(e)) return;
+    setAutoFit(false);                                   // free the price axis so the drag can move the chart up / down too
+    if (e.pointerType !== 'mouse') return;
     el.classList.add('dragging'); setCross(false);
   });
+  el.addEventListener('pointermove', () => { if (el.classList.contains('dragging')) queueOverlay(); });
   const end = () => { if (!el.classList.contains('dragging')) return; el.classList.remove('dragging'); setCross(true); };
   window.addEventListener('pointerup', end);
   window.addEventListener('pointercancel', end);
   window.addEventListener('blur', end);
 })();
 
-let LAST_DRAW = null;
+let LAST_DRAW = null, LAST_VIEW = '';
 function draw(cs, r){
   LAST_DRAW = {cs, r};
+  const viewKey = [S.source, curSymbol(), S.tf].join('|');
+  const freshView = viewKey !== LAST_VIEW;
+  if (freshView){ LAST_VIEW = viewKey; setAutoFit(true); }
   const n = cs.length, d = decimals(cs[n-1]?.c || 1), ms = tfOf(S.tf).ms, lastT = cs[n-1].t, px = cs[n-1].c;
   const annot = S.p.view === 'detailed';
   candles.applyOptions({priceFormat:{type:'price', precision:d, minMove:Math.pow(10,-d)}});
@@ -1344,7 +1367,7 @@ function draw(cs, r){
   candles.setData(cs.map(c => ({time:c.t/1000, open:c.o, high:c.h, low:c.l, close:c.c})).concat(future));
   candles.setMarkers(markers);
   OV = {rects, tags};
-  chart.timeScale().setVisibleLogicalRange(innerWidth < 700 ? {from: n - 30, to: n + 15} : {from: n - 90, to: n + 14});
+  if (freshView) chart.timeScale().setVisibleLogicalRange(innerWidth < 700 ? {from: n - 30, to: n + 15} : {from: n - 90, to: n + 14});
   queueOverlay();
 }
 
