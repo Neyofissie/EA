@@ -150,3 +150,10 @@ Fast mode produces more setups. Compare both on your pairs with the Backtest or 
   - Android needs the service worker for notifications.
   - On iPhone, add the app to the Home Screen and open it from there before enabling alerts (iOS 16.4+).
 - **Limits:** a web page can only scan while it is open. Phones pause pages in the background or when locked. For alerts when you are away, leave the app open with *Auto* on, on a computer (or a phone kept on, plugged in, with the app in front), and turn on Telegram auto-post. Telegram then pushes to your phone.
+
+### Alerts for 2:1 setups
+*Settings → Alerts → Measure success as: Reached the R:R target before the stop* (default, target **2** = 2:1).
+- **How it's measured:** for every past setup on the chart, the app checks whether price moved **2× the risk** in the trade's favour **before touching the original stop loss**. A candle that touches both counts as a loss.
+- **When an alert fires:** that rate must be at least *min %* over at least *min past setups*, and the setup's own target (TP2) must be at least 2:1.
+- **Where you see it:** the chart's % badge, the watchlist *Hit %* and the Forecast's *Reached 2R* line all show this rate. The badge turns **yellow** when a setup meets the rule.
+- **Choosing the %:** by pure chance a 2:1 target is reached about one time in three. Charts at 50–60%+ are already strong, and 70% will be rare on real markets.

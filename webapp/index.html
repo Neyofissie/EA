@@ -106,6 +106,7 @@ dialog{overflow-x:hidden}
 .ovt.side.short{color:#f87171;background:rgba(239,68,68,.16);transform:translate(-4px,-235%)}
 .ovt.conf{color:#fbbf24;border:1.5px solid #f59e0b;background:rgba(245,158,11,.14);transform:translate(-50%,-250%)}
 .ovt.conf.short{transform:translate(-50%,150%)}
+.ovt.conf.hot{color:#0d1017;background:#fbbf24}
 .faded{opacity:.45}
 .legend{position:absolute;left:10px;top:10px;z-index:4;display:flex;gap:8px;align-items:center;flex-wrap:wrap;pointer-events:none}
 .legend .chip{background:rgba(13,16,23,.85);border:1px solid var(--line);border-radius:8px;padding:5px 10px;font-weight:700}
@@ -205,7 +206,7 @@ button.mini{padding:3px 8px;font-size:12px;min-height:0}
   #wl td:nth-child(5){grid-area:win;color:var(--muted);font-size:13px}
   #wl td:nth-child(2)::before{content:'Trend ';color:var(--muted);font-size:11px}
   #wl td:nth-child(3)::before{content:'HTF ';color:var(--muted);font-size:11px}
-  #wl td:nth-child(5):not(:empty)::after{content:' win';}
+  #wl td:nth-child(5):not(:empty)::after{content:' hit';}
   #wl td[colspan]{grid-column:1/-1;grid-row:2}
   #wl td .pill{display:inline-block;border-radius:8px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle}
   #wl td:nth-child(4){text-align:right}
@@ -339,7 +340,7 @@ button.mini{padding:3px 8px;font-size:12px;min-height:0}
     <div class="card c-watch">
       <h2>Watchlist scanner <span class="r"><button id="scanAllBtn">Scan all</button></span></h2>
       <div style="overflow:auto"><table>
-        <thead><tr><th>Symbol</th><th>Trend</th><th>HTF</th><th>Setup</th><th>Win %</th></tr></thead>
+        <thead><tr><th>Symbol</th><th>Trend</th><th>HTF</th><th>Setup</th><th title="Share of past setups that reached the alert target">Hit %</th></tr></thead>
         <tbody id="wl"></tbody>
       </table></div>
     </div>
@@ -428,10 +429,12 @@ button.mini{padding:3px 8px;font-size:12px;min-height:0}
     <label>“Fresh” signal = within N bars<input id="s_fresh" type="number" min="1"></label>
     <div class="full" style="border-top:1px solid var(--line);padding-top:10px;color:var(--text);font-weight:600">Alerts</div>
     <label>Only alert high-probability setups<select id="s_alerton"><option value="1">Yes</option><option value="0">No, alert every setup</option></select></label>
-    <label>Min past TP1 rate on that chart (%)<input id="s_alertmin" type="number" min="0" max="100"></label>
+    <label>Measure success as<select id="s_alertbasis"><option value="rr">Reached the R:R target before the stop</option><option value="tp1">Hit TP1</option></select></label>
+    <label>R:R target (e.g. 2 = 2:1)<input id="s_alertrr" type="number" step="0.5" min="1"></label>
+    <label>Min past success rate on that chart (%)<input id="s_alertmin" type="number" min="0" max="100"></label>
     <label>Min past setups for the rate to count<input id="s_alertminn" type="number" min="1"></label>
     <label>Apply the same rule to MT5 auto-trading<select id="s_alertgate"><option value="1">Yes</option><option value="0">No</option></select></label>
-    <div class="full muted" style="font-size:12px">The rate is the share of earlier setups on the same pair, timeframe and settings that reached TP1 (the % badge on the chart). It is history, not a guarantee.</div>
+    <div class="full muted" style="font-size:12px">The rate is the share of earlier setups on the same pair, timeframe and settings that reached the target (default: 2× the risk, before touching the stop). It is shown on the chart's % badge, which turns yellow when a setup meets your rule. It is history, not a guarantee; no setup is ever sure.</div>
     <label>Closed candles only<select id="s_closed"><option value="1">Yes</option><option value="0">No</option></select></label>
     <div class="full" style="border-top:1px solid var(--line);padding-top:10px;color:var(--text);font-weight:600">Telegram</div>
     <div class="full muted" style="font-size:12px">To post from this app: in Telegram open <b>@BotFather</b> → <b>/newbot</b> and copy the token. Add the bot to your group or channel as an <b>admin</b>, send any message there, then press <b>Find my groups</b>.</div>
@@ -515,7 +518,7 @@ const DEFAULTS = {
   tf:'15m', htf:'4h', auto:'0', tdkey:'',
   tg:{token:'', chat:'', auto:false, setups:false, footer:'Not financial advice. Trade at your own risk.'},
   broker:{token:'', remember:true, accountId:'', auto:false, risk:0.5, maxOpen:3, dayLossPct:3, day:null, magic:240521, suffix:'', map:'', managed:[]},
-  p:{alertOn:true, alertMin:70, alertMinN:8, alertGateTrades:true, smcMode:'fast', intSwing:2, htfMode:'ema', htfPd:false, adxMin:0, volLo:0, volHi:0, ltfConfirm:false, news:true, newsBefore:30, newsAfter:30, corr:true, dailyLossR:3, maxOpenBt:3, tpMulti:true, tp1R:1, tp3Mode:'liq', tp3R:3, split:'50/30/20', be:true, view:'clean', poi:'level', choch:false, dispAtr:1.0, session:'both', minConf:0, req:[], strategy:'smc', srTouches:2, zoneW:0.5, srLook:300, tpMode:'zone', minRR:1.5, srTrend:'trend', swing:5, trend:'EMA + Structure', ema:200, htfEma:50, useHtf:true, tol:0.25, maxRetest:20, rej:true, slAtr:0.5, rr:2, fresh:5, closed:true},
+  p:{alertBasis:'rr', alertRR:2, alertOn:true, alertMin:70, alertMinN:8, alertGateTrades:true, smcMode:'fast', intSwing:2, htfMode:'ema', htfPd:false, adxMin:0, volLo:0, volHi:0, ltfConfirm:false, news:true, newsBefore:30, newsAfter:30, corr:true, dailyLossR:3, maxOpenBt:3, tpMulti:true, tp1R:1, tp3Mode:'liq', tp3R:3, split:'50/30/20', be:true, view:'clean', poi:'level', choch:false, dispAtr:1.0, session:'both', minConf:0, req:[], strategy:'smc', srTouches:2, zoneW:0.5, srLook:300, tpMode:'zone', minRR:1.5, srTrend:'trend', swing:5, trend:'EMA + Structure', ema:200, htfEma:50, useHtf:true, tol:0.25, maxRetest:20, rej:true, slAtr:0.5, rr:2, fresh:5, closed:true},
   wl:{
     binance:['BTCUSDT','ETHUSDT','SOLUSDT','BNBUSDT','XRPUSDT','ADAUSDT','DOGEUSDT','AVAXUSDT'],
     twelvedata:['EUR/USD','GBP/USD','USD/JPY','AUD/USD','USD/CAD','GBP/JPY','EUR/JPY','XAU/USD'],
@@ -939,6 +942,14 @@ function analyze(cs, p, htfBias, ctx = {}){
     s.hits = hits;
     if (rem <= 1e-9){ s.R = R; s.outcome = hits >= 1 ? 'win' : 'loss'; }
     else { s.R = null; }
+    // "reached N R": price travelled N × risk in the trade's favour before touching the ORIGINAL stop
+    const goal = s.entry + d*(p.alertRR || 2)*risk;
+    s.rr = null;
+    for (let k = s.i+1; k < n; k++){
+      const c = cs[k];
+      if (d===1 ? c.l <= s.sl : c.h >= s.sl){ s.rr = false; break; }      // stop first (same-candle ties count against)
+      if (d===1 ? c.h >= goal : c.l <= goal){ s.rr = true; break; }
+    }
   }
   const closedT = good.filter(s => s.outcome !== 'open');
   const wins = closedT.filter(s => s.outcome === 'win').length;
@@ -947,6 +958,9 @@ function analyze(cs, p, htfBias, ctx = {}){
     tp2: closedT.length ? closedT.filter(s => s.hits >= 2).length/closedT.length : null,
     tp3: closedT.length ? closedT.filter(s => s.hits >= 3).length/closedT.length : null,
     avgR: closedT.length ? closedT.reduce((a,s) => a + s.R, 0)/closedT.length : null};
+  const rrDone = good.filter(s => s.rr !== null);
+  stats.rrN = rrDone.length;
+  stats.rrRate = rrDone.length ? rrDone.filter(s => s.rr).length/rrDone.length : null;
 
   // Forecast: the trade the strategy is set up to take next
   const a = atr[n-1], tolN = a*p.tol, buf = a*p.slAtr, htfNow = htfBias[n-1] || 0, close = cs[n-1].c;
@@ -1132,6 +1146,7 @@ function forecastHtml(r){
   const record = st.trades >= 3
     ? `${st.wins} of ${st.trades} past setups hit ${S.p.tpMulti ? 'TP1' : 'TP'} (${pct(st.winRate)})${S.p.tpMulti ? `, TP2 ${pct(st.tp2)}, TP3 ${pct(st.tp3)}` : ''} · average ${st.avgR >= 0 ? '+' : ''}${st.avgR.toFixed(2)}R per trade`
     : `Only ${st.trades} finished setup${st.trades===1?'':'s'} in loaded history, too few to judge`;
+  const rrLine = st.rrN ? `<div>Reached ${S.p.alertRR}R</div><div>${pct(st.rrRate)} of ${st.rrN} past setups reached ${S.p.alertRR}× risk before the stop${goodOdds(r, p) && p ? ' · <span class="good">meets your alert rule</span>' : ''}</div>` : '';
   if (!p) return `<div>Setup</div><div class="muted">${r.trendDir && S.p.smcMode === 'fast'
       ? `Current leg is ${r.trendDir === 1 ? 'up' : 'down'}. Waiting for the next ${r.trendDir === 1 ? 'break above an internal high' : 'break below an internal low'} on ${tf}.`
       : `Nothing forming. Trend is not clear enough on ${tf}.`}</div>
@@ -1183,7 +1198,8 @@ function forecastHtml(r){
     ${p.gates && p.gates.length ? `<div>Filters</div><div style="display:grid;gap:2px">${p.gates.map(g =>
       `<div>${g.ok === null ? '◻' : g.ok ? '<span class="good">✓</span>' : '<span class="bad">✗</span>'} ${esc(g.name)}</div>`).join('')}</div>` : ''}
     ${newsRow()}
-    <div>Track record</div><div>${record}</div>`;
+    <div>Track record</div><div>${record}</div>
+    ${rrLine}`;
 }
 function newsRow(){
   if (!S.p.news) return '';
@@ -1369,8 +1385,9 @@ function draw(cs, r){
     tags.push({l:l0, p:p.sl, cls:'sl' + (up ? '' : ' up') + fade, text:`SL ${fmt(p.sl)}${p.hits && S.p.be && S.p.tpMulti ? ' → BE' : ''}`});
     tags.push({l:l0, p:p.sl, cls:'side' + (up ? '' : ' short') + fade, text:(up ? '▲ LONG' : '▼ SHORT') + state});
     tags.push({l:l1, p:p.entry, cls:'rr' + fade, text:`R:R ${rr.toFixed(1)}`});
-    if (r.stats.trades >= 3) tags.push({l:Math.round((l0 + l1)/2), p:T3, cls:'conf' + (up ? '' : ' short') + fade, text:pct(r.stats.winRate),
-      title:`${r.stats.wins} of ${r.stats.trades} past setups on this chart hit ${S.p.tpMulti ? 'TP1' : 'TP'}`});
+    const od = oddsOf(r);
+    if (od.n >= 3) tags.push({l:Math.round((l0 + l1)/2), p:T3, cls:'conf' + (up ? '' : ' short') + fade + (goodOdds(r, p) ? ' hot' : ''), text:pct(od.rate),
+      title:`${pct(od.rate)} of ${od.n} past setups on this chart ${od.what}`});
     planRange = {min: Math.min(p.sl, T3, p.entry), max: Math.max(p.sl, T3, p.entry)};
     priceLines.push(candles.createPriceLine({price:p.entry, color:'#60a5fa', lineWidth:1, lineStyle:3, axisLabelVisible:true, title:''}));
   }
@@ -1761,7 +1778,7 @@ function renderWatchlist(){
     const x = wlResults[[S.source, sym, S.tf, S.htf].join('|')];
     const row = !x ? '<td colspan="4" class="muted">–</td>' : x.err ? `<td colspan="4" style="color:var(--down)" title="${esc(x.err)}">error</td>`
       : `<td>${dirPill(x.r.trendDir)}</td><td>${S.p.useHtf ? dirPill(x.r.htf) : '–'}</td><td>${statusHtml(x.r)}</td>
-         <td title="${x.r.stats.trades} finished setups">${x.r.stats.trades >= 3 ? pct(x.r.stats.winRate) : ''}</td>`;
+         <td title="${oddsText(x.r)}">${oddsOf(x.r).n >= 3 ? pct(oddsOf(x.r).rate) : ''}</td>`;
     return `<tr data-sym="${esc(sym)}"><td><b>${esc(sym)}</b></td>${row}</tr>`;
   }).join('') || '<tr><td colspan="5" class="muted">Add symbols in Settings</td></tr>';
 }
@@ -1787,34 +1804,46 @@ const seen = {};
 function checkNew(source, sym, tf, r){
   const key = [source, sym, tf].join('|');
   const t = r.last ? r.last.t : 0;
-  const good = goodOdds(r);
+  const good = goodOdds(r, r.last), goodPlan = goodOdds(r, r.plan);
   if (key in seen && t > seen[key] && r.lastAgo <= 1 && good){
     const msg = `${sym} ${tf}: ${r.last.dir===1?'BUY':'SELL'} @ ${fmt(r.last.entry)} · SL ${fmt(r.last.sl)} · ${S.p.tpMulti ? tpList(r.last.tps) : 'TP ' + fmt(r.last.tp)} · ${oddsText(r)}`;
     toast(msg); beep();
     const nb = newsBlock(sym);
     if (nb) toast(`${sym}: not traded, high-impact ${nb.cur} news "${nb.title}" nearby.`);
     else if (S.broker.auto && BROKER.conn && source === S.source) brokerExecute(sym, r.last, false);
-    notify(`${r.last.dir===1?'🟢 BUY':'🔴 SELL'} ${sym} ${tf.toUpperCase()} · ${pct(r.stats.winRate)}`, msg);
+    notify(`${r.last.dir===1?'🟢 BUY':'🔴 SELL'} ${sym} ${tf.toUpperCase()} · 1:${setupRR(r.last).toFixed(1)} · ${pct(oddsOf(r).rate)}`, msg);
     if (S.tg.auto && S.tg.token && S.tg.chat) tgSend(signalLines(sym, tf, fromSignal(r.last)), true);
   } else if (key in seen && t > seen[key] && r.lastAgo <= 1 && S.broker.auto && BROKER.conn && source === S.source && !S.p.alertGateTrades && !newsBlock(sym))
     brokerExecute(sym, r.last, false);
   seen[key] = Math.max(seen[key]||0, t);
   const p = r.plan, sk = key + '|setup', bt = p && p.type==='limit' && p.htfOk && p.bosT ? p.bosT : 0;
-  if (sk in seen && bt > seen[sk] && good){
+  if (sk in seen && bt > seen[sk] && goodPlan){
     const msg = `${sym} ${tf}: ${p.dir===1?'BUY':'SELL'} setup forming. Limit ~${fmt(p.entry)} · SL ${fmt(p.sl)} · ${S.p.tpMulti ? tpList(p.tps) : 'TP ' + fmt(p.tp)} · ${oddsText(r)}`;
     toast(msg); beep();
-    notify(`⏳ ${p.dir===1?'BUY':'SELL'} setup ${sym} ${tf.toUpperCase()} · ${pct(r.stats.winRate)}`, msg);
+    notify(`⏳ ${p.dir===1?'BUY':'SELL'} setup ${sym} ${tf.toUpperCase()} · 1:${setupRR(p).toFixed(1)} · ${pct(oddsOf(r).rate)}`, msg);
     if (S.tg.auto && S.tg.setups && S.tg.token && S.tg.chat) tgSend(signalLines(sym, tf, fromPlan(p)), true);
   }
   seen[sk] = Math.max(seen[sk]||0, bt);
 }
 // Only alert when this chart's past setups (same pair, timeframe and settings) reached TP1 often enough
-function goodOdds(r){
-  if (!S.p.alertOn) return true;
+// The rate the alerts use: share of past setups that reached N R before the stop (default), or that hit TP1
+function oddsOf(r){
   const st = r.stats || {};
-  return st.trades >= S.p.alertMinN && st.winRate*100 >= S.p.alertMin;
+  return S.p.alertBasis === 'rr' ? {rate: st.rrRate, n: st.rrN || 0, what: `reached ${S.p.alertRR}R`} : {rate: st.winRate, n: st.trades || 0, what: 'hit TP1'};
 }
-const oddsText = r => r.stats && r.stats.trades ? `${pct(r.stats.winRate)} of ${r.stats.trades} past setups hit TP1` : 'no history yet';
+// R:R the trade itself offers to its main target (TP2)
+function setupRR(x){
+  const tps = x && (x.tps || [x.tp]); if (!tps) return 0;
+  const t = tps[Math.min(1, tps.length - 1)];
+  return Math.abs(t - x.entry) / Math.abs(x.entry - x.sl);
+}
+function goodOdds(r, x){
+  if (!S.p.alertOn) return true;
+  const o = oddsOf(r);
+  if (!(o.n >= S.p.alertMinN && o.rate*100 >= S.p.alertMin)) return false;
+  return S.p.alertBasis !== 'rr' || !x || setupRR(x) >= S.p.alertRR - 1e-9;
+}
+const oddsText = r => { const o = oddsOf(r); return o.n ? `${pct(o.rate)} of ${o.n} past setups ${o.what}` : 'no history yet'; };
 // System notification; through the service worker when there is one (needed on Android and for iPhone home-screen apps)
 async function notify(title, body){
   try {
@@ -1828,13 +1857,14 @@ async function enableNotifications(){
   if (!('Notification' in window)){ toast(/iPhone|iPad/.test(navigator.userAgent) ? 'On iPhone, add the app to your Home Screen first (Share → Add to Home Screen), open it from there, then enable alerts.' : 'This browser does not support notifications.'); return; }
   const p = await Notification.requestPermission();
   toast(p === 'granted' ? 'Alerts are on. You will be notified about high-probability setups.' : 'Notifications are blocked. Allow them in your browser or phone settings.');
-  if (p === 'granted') notify('✅ Alerts enabled', `You'll get setups whose chart history is at least ${S.p.alertMin}% TP1.`);
+  if (p === 'granted') notify('✅ Alerts enabled', `You'll get setups where at least ${S.p.alertMin}% of past setups ${S.p.alertBasis === 'rr' ? 'reached ' + S.p.alertRR + 'R' : 'hit TP1'}.`);
   renderAlertState();
 }
 function renderAlertState(){
   const el = $('alertState'); if (!el) return;
   const perm = 'Notification' in window ? Notification.permission : 'unsupported';
-  el.innerHTML = perm === 'granted' ? `<span class="good">On</span> · setups with ≥${S.p.alertMin}% TP1 history (${S.p.alertMinN}+ setups)`
+  const basis = S.p.alertBasis === 'rr' ? `that reached ${S.p.alertRR}R` : 'that hit TP1';
+  el.innerHTML = perm === 'granted' ? `<span class="good">On</span> · ≥${S.p.alertMin}% of past setups ${basis} (${S.p.alertMinN}+ setups)${S.p.alertBasis === 'rr' ? `, target ≥ 1:${S.p.alertRR}` : ''}`
     : perm === 'denied' ? '<span class="bad">Blocked in browser settings</span>' : perm === 'unsupported' ? '<span class="muted">Not supported here</span>' : '<span class="muted">Off</span>';
 }
 if ('serviceWorker' in navigator && /^https?:/.test(location.protocol)) navigator.serviceWorker.register('sw.js').catch(() => {});
@@ -1890,7 +1920,7 @@ $('bt_tables').onclick = e => {
   e.target.textContent = 'Applied'; toast('Settings applied. Run the backtest again to see full results.'); scanCurrent();
 };
 
-const F = [['s_alerton','alertOn',v=>v==='1'],['s_alertmin','alertMin',Number],['s_alertminn','alertMinN',Number],['s_alertgate','alertGateTrades',v=>v==='1'],
+const F = [['s_alertbasis','alertBasis',String],['s_alertrr','alertRR',Number],['s_alerton','alertOn',v=>v==='1'],['s_alertmin','alertMin',Number],['s_alertminn','alertMinN',Number],['s_alertgate','alertGateTrades',v=>v==='1'],
   ['s_smcmode','smcMode',String],['s_intswing','intSwing',Number],['s_htfmode','htfMode',String],['s_htfpd','htfPd',v=>v==='1'],['s_adx','adxMin',Number],['s_ltf','ltfConfirm',v=>v==='1'],
   ['s_vollo','volLo',Number],['s_volhi','volHi',Number],['s_news','news',v=>v==='1'],['s_newsb','newsBefore',Number],['s_newsa','newsAfter',Number],
   ['s_corr','corr',v=>v==='1'],['s_maxopenbt','maxOpenBt',Number],['s_dayloss','dailyLossR',Number],
