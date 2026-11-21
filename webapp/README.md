@@ -130,3 +130,13 @@ The forecast's **Filters** row shows ✓ / ✗ for every active filter on the cu
   4. Optionally switch on **Post new signals automatically** (and *setups forming*). Like the other alerts, this only runs while the app is open.
 
 The bot token is stored only in this browser.
+
+## SMC mode: Fast (current leg) vs Classic
+Settings → **SMC mode**. **Fast** is the default.
+- **Fast: follow the current leg.**
+  - **Trend:** the direction of the last close through a swing high or low. A CHoCH flips it straight away instead of waiting for the 200 EMA.
+  - **Setups:** come from **internal swings** (default 2 candles each side) inside that leg, so the strategy reacts to breaks in the move that is happening now. The bigger swings (swing length) still define the leg.
+  - **Retest, confluences, TP1–TP3 and filters:** work exactly as before.
+- **Classic:** the original behaviour. Swing-length structure and the selected trend filter (EMA / structure / last break). Classic gives the same backtest results as before this change.
+
+Fast mode produces more setups. Compare both on your pairs with the Backtest or the walk-forward optimizer.
