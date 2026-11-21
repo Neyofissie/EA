@@ -93,3 +93,29 @@ The app can place trades on your MT5 account through **MetaApi** (metaapi.cloud)
 - Auto-trading and the partial exits only run while the page is open. The SL/TP on the server always stay in place. For 24/7 trading use the MT5 EA in `/mt5`.
 - MetaApi has a free tier with limits; check their pricing.
 - Test with a **demo account** first.
+
+## Quality filters, risk guards and the walk-forward optimizer
+All of these are in **Settings**. The filters start **off** (except news and the risk guards), so you can switch them on one at a time and test each.
+
+| Feature | What it does |
+|---|---|
+| **HTF filter** | *EMA bias* (as before), *HTF market structure* (direction of the last HTF break), or *both*. |
+| **HTF discount / premium** | Buys only below the middle of the HTF dealing range (last HTF swing low → high); sells only above it. |
+| **Min ADX** | Skips signals when ADX(14) is below the value (choppy market). Around 20–25 is typical. |
+| **Volatility band** | Skips signals when ATR is far below or above its 100-candle average (e.g. 0.7–2.0). |
+| **LTF CHoCH confirmation** | The previous and the signal candle must show a lower-timeframe break back in the trade direction inside the retest (15m→5m, 1h→15m, 4h→1h…). The stop moves just beyond that LTF swing, which gives a better R:R. Only LTF candles that had closed by the signal close are used. The backtest only counts the period that has LTF data. |
+| **Trailing TP3** | *TP3 → Trailing stop*: after TP2 the runner has no fixed target; its stop follows the last confirmed swing low / high. |
+| **News filter** | Loads this week's high-impact events from a free public calendar (nfs.faireconomy.media). No new alerts or broker trades on a pair from *N* minutes before to *N* minutes after news for either of its currencies. Live only: there is no historical calendar, so the backtest can't apply it. If the calendar can't be loaded, the Forecast panel says so. |
+| **Correlated trades** | No new trade if an open one shares a currency on the same side (EURUSD long + GBPUSD long both sell USD). |
+| **Max open / daily loss** | Backtest: max open trades and a daily loss limit in R. Broker: max open trades and a daily loss limit in % of the day's starting balance. |
+| **By session** | The backtest shows results for Asia / London / New York / late entries. |
+
+The backtest also always applies **one open trade per pair**, like live trading.
+
+### Walk-forward optimizer (Backtest → Optimize)
+1. **Grid:** tests 432 combinations of R:R, retest tolerance, SL buffer, minimum confluence score and minimum ADX.
+2. **In-sample:** each combination is scored on the **oldest 70%** of every pair, by average R. The top 10 are listed.
+3. **Out-of-sample:** each of those is then checked on the **newest 30%**, which it was never tuned on.
+4. **Choosing:** only trust settings that are good on both halves; a big in-sample number with a weak out-of-sample number is overfitting. **Apply** copies a row's settings into the app.
+
+The forecast's **Filters** row shows ✓ / ✗ for every active filter on the current setup, and **News** shows the next relevant event.

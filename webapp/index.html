@@ -66,6 +66,9 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 .form{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .form label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
 .form .full{grid-column:1/-1}
+.form label{min-width:0}
+.form input:not([type=checkbox]),.form select,.form textarea{width:100%;min-width:0}
+dialog{overflow-x:hidden}
 .toast{position:fixed;right:16px;bottom:16px;display:flex;flex-direction:column;gap:8px;z-index:9}
 .toast div{background:var(--panel2);border:1px solid var(--line);border-left:4px solid var(--accent);padding:10px 14px;border-radius:8px;max-width:320px}
 #chart{position:relative}
@@ -161,6 +164,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
         <label>Costs per trade (R) <input id="bt_cost" type="number" step="0.01" min="0" value="0.05" title="Spread + commission as a fraction of your risk. 0.05 = 5% of the stop distance."></label>
         <label>Risk per trade % <input id="bt_risk" type="number" step="0.1" min="0.1" value="1"></label>
         <button class="primary" id="bt_run">Run backtest</button>
+        <button id="bt_opt" title="Tests 432 setting combinations on the older 70% of the data and checks the best ones on the newest 30%">Optimize (walk-forward)</button>
         <span class="muted" id="bt_status"></span>
       </div>
       <div id="bt_sum"><p class="muted">Choose what to test and press <b>Run backtest</b>. It replays the strategy over past candles using your current timeframe, HTF and Settings, and checks whether each signal hit its SL or TP first.</p></div>
@@ -209,10 +213,23 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
       <input id="s_tdkey" type="password" autocomplete="off"></label>
     <label>Strategy<select id="s_strategy"><option value="smc">SMC: BOS + retest</option><option value="sr">Support &amp; Resistance</option><option value="both">Both strategies</option></select></label>
     <label>Swing length (bars each side)<input id="s_swing" type="number" min="1"></label>
+    <div class="full" style="border-top:1px solid var(--line);padding-top:10px;color:var(--text);font-weight:600">Quality filters</div>
+    <label>HTF filter<select id="s_htfmode"><option value="ema">HTF EMA bias</option><option value="structure">HTF market structure (last HTF BOS)</option><option value="both">Both</option></select></label>
+    <label>Entry in HTF discount / premium<select id="s_htfpd"><option value="0">No</option><option value="1">Yes</option></select></label>
+    <label>Min ADX (trend strength, 0 = off)<input id="s_adx" type="number" min="0" max="60"></label>
+    <label>Lower-timeframe CHoCH confirmation<select id="s_ltf"><option value="0">No</option><option value="1">Yes (tighter stop)</option></select></label>
+    <label>Volatility min (× normal ATR, 0 = off)<input id="s_vollo" type="number" step="0.1" min="0"></label>
+    <label>Volatility max (× normal ATR, 0 = off)<input id="s_volhi" type="number" step="0.1" min="0"></label>
+    <label>News filter (high-impact)<select id="s_news"><option value="1">On</option><option value="0">Off</option></select></label>
+    <label>Quiet minutes before / after news<span style="display:flex;gap:6px"><input id="s_newsb" type="number" min="0" style="width:50%"><input id="s_newsa" type="number" min="0" style="width:50%"></span></label>
+    <div class="full" style="border-top:1px solid var(--line);padding-top:10px;color:var(--text);font-weight:600">Risk guards</div>
+    <label>Block correlated trades (shared currency, same side)<select id="s_corr"><option value="1">Yes</option><option value="0">No</option></select></label>
+    <label>Backtest: max open trades (0 = off)<input id="s_maxopenbt" type="number" min="0"></label>
+    <label>Backtest: daily loss limit (R, 0 = off)<input id="s_dayloss" type="number" step="0.5" min="0"></label>
     <div class="full" style="border-top:1px solid var(--line);padding-top:10px;color:var(--text);font-weight:600">Take profits</div>
     <label>Take profit<select id="s_tpmulti"><option value="1">TP1 · TP2 · TP3 (partial exits)</option><option value="0">Single TP</option></select></label>
     <label>TP1 at (R)<input id="s_tp1r" type="number" step="0.1" min="0.2"></label>
-    <label>TP3<select id="s_tp3mode"><option value="liq">Next liquidity (swing high / low)</option><option value="rr">Fixed R multiple</option></select></label>
+    <label>TP3<select id="s_tp3mode"><option value="liq">Next liquidity (swing high / low)</option><option value="rr">Fixed R multiple</option><option value="trail">Trailing stop behind swings</option></select></label>
     <label>TP3 fallback / fixed (R)<input id="s_tp3r" type="number" step="0.5" min="1"></label>
     <label>Close at TP1 / TP2 / TP3 (%)<input id="s_split" type="text" placeholder="50/30/20"></label>
     <label>After TP1, move SL to entry<select id="s_be"><option value="1">Yes</option><option value="0">No</option></select></label>
@@ -282,6 +299,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
     <label>Auto-trade new signals<select id="b_auto"><option value="0">Off (manual button only)</option><option value="1">On</option></select></label>
     <label>Risk per trade (% of balance)<input id="b_risk" type="number" step="0.1" min="0.05"></label>
     <label>Max open trades<input id="b_max" type="number" min="1"></label>
+    <label>Daily loss limit (% of the day's starting balance, 0 = off)<input id="b_dayloss" type="number" step="0.5" min="0"></label>
     <label>Broker symbol suffix (e.g. .m, .raw)<input id="b_suffix" autocomplete="off"></label>
     <label class="full">Symbol names if your broker differs, one per line, e.g. XAU/USD=GOLD<textarea id="b_map" rows="2" placeholder="XAU/USD=GOLD"></textarea></label>
   </div>
@@ -322,8 +340,8 @@ const CONF_LABEL = {OB:'Order block', FVG:'Fair value gap', Sweep:'Liquidity swe
 const DEFAULTS = {
   source:'binance', symbol:{binance:'BTCUSDT', twelvedata:'EUR/USD', demo:'DEMO-1'},
   tf:'15m', htf:'4h', auto:'0', tdkey:'',
-  broker:{token:'', remember:true, accountId:'', auto:false, risk:0.5, maxOpen:3, magic:240521, suffix:'', map:'', managed:[]},
-  p:{tpMulti:true, tp1R:1, tp3Mode:'liq', tp3R:3, split:'50/30/20', be:true, view:'clean', poi:'level', choch:false, dispAtr:1.0, session:'both', minConf:0, req:[], strategy:'smc', srTouches:2, zoneW:0.5, srLook:300, tpMode:'zone', minRR:1.5, srTrend:'trend', swing:5, trend:'EMA + Structure', ema:200, htfEma:50, useHtf:true, tol:0.25, maxRetest:20, rej:true, slAtr:0.5, rr:2, fresh:5, closed:true},
+  broker:{token:'', remember:true, accountId:'', auto:false, risk:0.5, maxOpen:3, dayLossPct:3, day:null, magic:240521, suffix:'', map:'', managed:[]},
+  p:{htfMode:'ema', htfPd:false, adxMin:0, volLo:0, volHi:0, ltfConfirm:false, news:true, newsBefore:30, newsAfter:30, corr:true, dailyLossR:3, maxOpenBt:3, tpMulti:true, tp1R:1, tp3Mode:'liq', tp3R:3, split:'50/30/20', be:true, view:'clean', poi:'level', choch:false, dispAtr:1.0, session:'both', minConf:0, req:[], strategy:'smc', srTouches:2, zoneW:0.5, srLook:300, tpMode:'zone', minRR:1.5, srTrend:'trend', swing:5, trend:'EMA + Structure', ema:200, htfEma:50, useHtf:true, tol:0.25, maxRetest:20, rej:true, slAtr:0.5, rr:2, fresh:5, closed:true},
   wl:{
     binance:['BTCUSDT','ETHUSDT','SOLUSDT','BNBUSDT','XRPUSDT','ADAUSDT','DOGEUSDT','AVAXUSDT'],
     twelvedata:['EUR/USD','GBP/USD','USD/JPY','AUD/USD','USD/CAD','GBP/JPY','EUR/JPY','XAU/USD'],
@@ -419,6 +437,52 @@ function atrArr(cs, len=14){
     return a = a===null ? tr : (a*(len-1) + tr)/len;
   });
 }
+// Wilder ADX
+function adxArr(cs, len=14){
+  const n = cs.length, out = new Array(n).fill(0);
+  let tr = 0, pdm = 0, ndm = 0, adx = null;
+  for (let i = 1; i < n; i++){
+    const c = cs[i], pc = cs[i-1];
+    const up = c.h - pc.h, dn = pc.l - c.l;
+    const t = Math.max(c.h - c.l, Math.abs(c.h - pc.c), Math.abs(c.l - pc.c));
+    const pd = up > dn && up > 0 ? up : 0, nd = dn > up && dn > 0 ? dn : 0;
+    if (i <= len){ tr += t; pdm += pd; ndm += nd; if (i < len) continue; }
+    else { tr = tr - tr/len + t; pdm = pdm - pdm/len + pd; ndm = ndm - ndm/len + nd; }
+    const pdi = tr ? 100*pdm/tr : 0, ndi = tr ? 100*ndm/tr : 0;
+    const dx = pdi + ndi ? 100*Math.abs(pdi - ndi)/(pdi + ndi) : 0;
+    adx = adx === null ? dx : (adx*(len-1) + dx)/len;
+    out[i] = adx;
+  }
+  return out;
+}
+// HTF market structure: direction of the last HTF break, and the HTF dealing range (last swing low / high),
+// for the last HTF candle fully closed when each LTF candle closed
+function htfStructSeries(cs, ltfMs, htf, htfMs, swing){
+  const out = cs.map(() => ({dir:0, lo:null, hi:null}));
+  if (!htf || htf.length < 2*swing + 2) return out;
+  const st = []; let lastH = null, lastL = null, dir = 0;
+  for (let i = 0; i < htf.length; i++){
+    const j = i - swing;
+    if (j >= swing){
+      let isH = true, isL = true;
+      for (let k = j-swing; k <= j+swing; k++){ if (k === j) continue;
+        if (htf[k].h >= htf[j].h) isH = false;
+        if (htf[k].l <= htf[j].l) isL = false; }
+      if (isH) lastH = htf[j].h;
+      if (isL) lastL = htf[j].l;
+    }
+    if (lastH !== null && htf[i].c > lastH) dir = 1;
+    else if (lastL !== null && htf[i].c < lastL) dir = -1;
+    st.push({dir, lo:lastL, hi:lastH});
+  }
+  let j = -1;
+  for (let i = 0; i < cs.length; i++){
+    const closeT = cs[i].t + ltfMs;
+    while (j+1 < htf.length && htf[j+1].t + htfMs <= closeT) j++;
+    if (j >= 0) out[i] = st[j];
+  }
+  return out;
+}
 // HTF bias (+1/-1) of the last HTF candle fully closed when each LTF candle closed
 function htfBiasSeries(cs, ltfMs, htf, htfMs, emaLen){
   const out = new Array(cs.length).fill(0);
@@ -433,9 +497,10 @@ function htfBiasSeries(cs, ltfMs, htf, htfMs, emaLen){
   return out;
 }
 
-function analyze(cs, p, htfBias){
+function analyze(cs, p, htfBias, ctx = {}){
   const n = cs.length, L = p.swing;
   const ema = emaArr(cs.map(c=>c.c), p.ema), atr = atrArr(cs);
+  const loAt = new Array(n).fill(null), hiAt = new Array(n).fill(null);   // last confirmed swing low / high at each bar
   let lastH=null, prevH=null, lastHIdx=null, hBroken=true;
   let lastL=null, prevL=null, lastLIdx=null, lBroken=true;
   let trendDir=0, pend=null;
@@ -515,6 +580,7 @@ function analyze(cs, p, htfBias){
     const tDn = p.trend==='EMA' ? eDn : p.trend==='Structure' ? sDn : p.trend==='EMA + Structure' ? eDn&&sDn : true;
     trendDir = tUp && !tDn ? 1 : tDn && !tUp ? -1 : 0;
     trendArr[i] = trendDir;
+    loAt[i] = lastL; hiAt[i] = lastH;
     const tol = atr[i]*p.tol;
 
     // pending setup: wait for price to come back into an entry zone and reject it
@@ -559,9 +625,62 @@ function analyze(cs, p, htfBias){
   }
   const useSmc = p.strategy !== 'sr', useSr = p.strategy !== 'smc';
   const sr = useSr ? srScan(cs, p, atr, trendArr, htfBias) : {zones:[], signals:[], plan:null};
-  const ok = s => !p.useHtf || s.htf === s.dir;
+  // ----- quality filters -----
+  const needAdx = p.adxMin > 0, needVol = p.volLo > 0 || p.volHi > 0;
+  const adx = needAdx ? adxArr(cs) : null;
+  let volR = null;
+  if (needVol){ volR = new Array(n).fill(1); let sum = 0;
+    for (let i = 0; i < n; i++){ sum += atr[i]; if (i >= 100) sum -= atr[i-100]; volR[i] = atr[i] / (sum / Math.min(i+1, 100)); } }
+  const htfS = ctx.htfS || null;
+  // gates that can be checked on any bar (used for signals and for the forecast)
+  const gateList = (i, d, entry) => {
+    const g = [];
+    if (p.useHtf){
+      if (p.htfMode !== 'structure') g.push({name:`HTF EMA ${d===1?'up':'down'}`, ok: htfBias[i] === d});
+      if (p.htfMode !== 'ema') g.push({name:`HTF structure ${d===1?'bullish':'bearish'}`, ok: !!htfS && htfS[i].dir === d});
+      if (p.htfPd){ const h = htfS && htfS[i]; const mid = h && h.lo !== null && h.hi !== null ? (h.lo + h.hi)/2 : null;
+        g.push({name:`Entry in HTF ${d===1?'discount':'premium'}`, ok: mid !== null && (d === 1 ? entry < mid : entry > mid)}); }
+    }
+    if (needAdx) g.push({name:`Trending (ADX ${Math.round(adx[i])} ≥ ${p.adxMin})`, ok: adx[i] >= p.adxMin});
+    if (needVol) g.push({name:`Normal volatility (${volR[i].toFixed(2)}× avg)`, ok: (!(p.volLo > 0) || volR[i] >= p.volLo) && (!(p.volHi > 0) || volR[i] <= p.volHi)});
+    return g;
+  };
+  // lower-timeframe CHoCH inside the retest (the previous and the signal candle), using only LTF candles that closed by the signal close
+  const ltf = ctx.ltf || null, tfMs = ctx.tfMs || 0;
+  const ltfStart = ltf && ltf.length ? ltf[0].t : Infinity;
+  const ltfCheck = s => {
+    if (!ltf || !ltf.length || s.i < 1) return null;
+    const T0 = cs[s.i-1].t, T1 = cs[s.i].t + tfMs;
+    if (ltfStart > T0) return null;                                   // no LTF data for this period
+    let lo = 0, hi = ltf.length;
+    while (lo < hi){ const m = (lo + hi) >> 1; if (ltf[m].t < T0) lo = m + 1; else hi = m; }
+    const w = [];
+    for (let k = lo; k < ltf.length && ltf[k].t < T1; k++) w.push(ltf[k]);
+    if (w.length < 3) return null;
+    const d = s.dir, lvl = s.level, tol = atr[s.i]*p.tol;
+    let m = -1;
+    for (let k = 0; k < w.length; k++) if ((d === 1 ? w[k].l <= lvl + tol : w[k].h >= lvl - tol) && (m < 0 || (d === 1 ? w[k].l < w[m].l : w[k].h > w[m].h))) m = k;
+    if (m < 0) return null;
+    let ref = m > 0 ? (d === 1 ? -Infinity : Infinity) : (d === 1 ? w[m].h : w[m].l);
+    for (let k = 0; k < m; k++) ref = d === 1 ? Math.max(ref, w[k].h) : Math.min(ref, w[k].l);
+    for (let k = m+1; k < w.length; k++) if (d === 1 ? w[k].c > ref : w[k].c < ref) return {ext: d === 1 ? w[m].l : w[m].h};
+    return null;
+  };
+  const passes = s => {
+    if (gateList(s.i, s.dir, s.entry).some(g => !g.ok)) return false;
+    if (p.ltfConfirm){
+      const c = ltfCheck(s); if (!c) return false;
+      const nsl = c.ext - s.dir*0.1*atr[s.i];                             // tighter stop just beyond the LTF swing
+      if (s.dir === 1 ? (nsl > s.sl && nsl < s.entry) : (nsl < s.sl && nsl > s.entry)){
+        s.sl = nsl;
+        if (String(s.kind).startsWith('SMC')) s.tp = s.entry + s.dir*p.rr*Math.abs(s.entry - nsl);
+      }
+      s.ltf = true;
+    }
+    return true;
+  };
   const good = (useSmc ? signals : []).concat(sr.signals)
-    .filter(ok).sort((a,b) => a.i - b.i);
+    .filter(passes).sort((a,b) => a.i - b.i);
   for (const s of good) s.rWin = Math.abs(s.tp - s.entry) / Math.abs(s.entry - s.sl);
   const last = good[good.length-1] || null;
 
@@ -587,18 +706,24 @@ function analyze(cs, p, htfBias){
     }
     if (t3 !== null && Math.abs(t3 - entry) <= 8*risk) liq = true;
     else t3 = entry + d*Math.max(p.tp3R, Math.abs(t2 - entry)/risk + 1)*risk;
-    const out = [t1, t2, t3]; out.liq = liq;
+    const out = [t1, t2, t3]; out.liq = liq; out.trail = p.tp3Mode === 'trail';
     return out;
   };
   const parts = p.tpMulti ? splitOf(p.split) : [1, 0, 0];
   // Walk forward candle by candle: stop first (conservative), then TPs in order; after TP1 the stop can move to break-even
   for (const s of good){
     s.tps = tpLevels(s.entry, s.sl, s.dir, s.tp, s.i);
-    const d = s.dir, risk = Math.abs(s.entry - s.sl), tps = p.tpMulti ? s.tps : [s.tp, s.tp, s.tp];
+    const d = s.dir, risk = Math.abs(s.entry - s.sl), tps = p.tpMulti ? s.tps.slice() : [s.tp, s.tp, s.tp];
+    const trail = p.tpMulti && p.tp3Mode === 'trail';
+    if (trail) tps[2] = d === 1 ? Infinity : -Infinity;                 // the runner exits only on the trailing stop
     let stop = s.sl, rem = 1, R = 0, hits = 0;
     s.outcome = 'open';
     for (let k = s.i+1; k < n; k++){
       const c = cs[k];
+      if (trail && hits >= 2){                                          // trail behind the last confirmed swing
+        const sw = d === 1 ? loAt[k-1] : hiAt[k-1];
+        if (sw !== null){ const t = sw - d*0.1*atr[k-1]; if (d === 1 ? t > stop && t < c.o : t < stop && t > c.o) stop = t; }
+      }
       if (d===1 ? c.l <= stop : c.h >= stop){ R += rem*d*(stop - s.entry)/risk; rem = 0; s.exitI = k; break; }
       while (hits < 3 && (d===1 ? c.h >= tps[hits] : c.l <= tps[hits])){
         R += parts[hits]*Math.abs(tps[hits] - s.entry)/risk; rem -= parts[hits]; hits++;
@@ -650,13 +775,19 @@ function analyze(cs, p, htfBias){
   else if (trendDir === -1 && !lBroken && lastL !== null && lastL < close)
     plan = mk(-1, 'watch', lastL, {trigger:lastL});
 
+  if (plan && plan.type !== 'active'){
+    plan.gates = gateList(n-1, plan.dir, plan.entry);
+    plan.htfOk = plan.gates.every(g => g.ok);
+    if (p.ltfConfirm) plan.gates.push({name:'LTF CHoCH at the retest (checked on entry)', ok:null});
+  }
   if (plan && !plan.tps) plan.tps = tpLevels(plan.entry, plan.sl, plan.dir, plan.tp, n-1);
   if (plan && plan.hits === undefined) plan.hits = 0;
 
   return {
     ema, bos: useSmc ? bos : [], zones: sr.zones, pivots, sweeps, signals:good, trendDir, state: useSmc && pend ? pend.dir : 0,
     level: useSmc && pend ? pend.lvl : null, htf: htfNow,
-    last, lastAgo: last ? n-1-last.i : null, price: close, plan, stats,
+    last, lastAgo: last ? n-1-last.i : null, price: close, plan, stats, loAt, hiAt,
+    ltfStart: p.ltfConfirm ? ltfStart : null,
   };
 }
 
@@ -749,14 +880,26 @@ async function loadAndAnalyze(source, symbol, tfKey, htfKey, n, closedOnly){
   const p = S.p, tf = tfOf(tfKey), htf = tfOf(htfKey);
   let cs = await getCandles(source, symbol, tfKey, n);
   if (closedOnly) cs = cs.filter(c => c.t + tf.ms <= Date.now());
-  let bias = new Array(cs.length).fill(0);
+  const ctx = await loadContext(source, symbol, tfKey, htfKey, n, cs);
+  return {cs, ctx, r: analyze(cs, p, ctx.bias, ctx)};
+}
+// Higher-timeframe bias/structure and lower-timeframe candles needed by the filters
+const LTF_OF = {'5m':'1m', '15m':'5m', '30m':'5m', '1h':'15m', '4h':'1h', '1d':'4h'};
+async function loadContext(source, symbol, tfKey, htfKey, n, cs){
+  const p = S.p, tf = tfOf(tfKey), htf = tfOf(htfKey), ctx = {tfMs: tf.ms, bias: new Array(cs.length).fill(0)};
   if (p.useHtf){
     // enough HTF candles to cover the whole LTF history plus EMA warm-up
     const hn = n <= 1000 ? 500 : Math.min(5000, Math.ceil(n*tf.ms/htf.ms) + p.htfEma*3 + 10);
     const h = (await getCandles(source, symbol, htfKey, hn)).filter(c => c.t + htf.ms <= Date.now());
-    bias = htfBiasSeries(cs, tf.ms, h, htf.ms, p.htfEma);
+    ctx.bias = htfBiasSeries(cs, tf.ms, h, htf.ms, p.htfEma);
+    ctx.htfS = htfStructSeries(cs, tf.ms, h, htf.ms, Math.max(2, Math.min(p.swing, 5)));
   }
-  return {cs, r: analyze(cs, p, bias)};
+  const lk = LTF_OF[tfKey];
+  if (p.ltfConfirm && lk){
+    const lt = tfOf(lk), ln = Math.min(5000, Math.ceil(n*tf.ms/lt.ms) + 10);
+    ctx.ltf = (await getCandles(source, symbol, lk, ln)).filter(c => c.t + lt.ms <= Date.now());
+  }
+  return ctx;
 }
 const scanSymbol = (source, symbol, tfKey, htfKey) =>
   loadAndAnalyze(source, symbol, tfKey, htfKey, Math.max(1000, S.p.ema*3), S.p.closed);
@@ -799,7 +942,7 @@ function forecastHtml(r){
   else if (p.type==='limit' && p.poi && p.poi !== 'Level') cond = `Structure broke. Enter when price pulls back into the ${p.poi==='OB' ? 'order block' : 'fair value gap'} (${fmt(p.entry)} side first) and a ${up?'bullish':'bearish'} candle closes back ${up?'above':'below'} its middle. Cancel on a close ${up?'below':'above'} ${fmt(p.invalid)} or after ${p.barsLeft} more candles.`;
   else if (p.type==='limit') cond = `Structure broke at ${fmt(p.entry)}. Enter when price pulls back into ${fmt(p.entry - p.tol)} – ${fmt(p.entry + p.tol)}${S.p.poi==='any' ? ' (or deeper, in the fair value gap or order block)' : ''} and a ${up?'bullish':'bearish'} candle closes back ${up?'above':'below'} it. Cancel on a close ${up?'below':'above'} ${fmt(p.invalid)} or after ${p.barsLeft} more candles.`;
   else cond = `Trend is ${up?'up':'down'}. If a ${tf} candle closes ${up?'above':'below'} ${fmt(p.trigger)}, wait for a pull-back to that level and enter there.`;
-  if (!p.htfOk) cond += ` <b>HTF (${S.htf}) points the other way, so the scanner will not signal this one.</b>`;
+  if (!p.htfOk) cond += ` <b>Blocked by: ${(p.gates || []).filter(g => g.ok === false).map(g => g.name).join(', ') || 'HTF bias'}. The scanner will not signal this one.</b>`;
   const risk = Math.abs(p.entry - p.sl), reward = Math.abs(p.tps[2] - p.entry), dist = v => v.toFixed(decimals(p.entry));
   const sp = splitOf(S.p.split);
   let confRow = '';
@@ -825,12 +968,22 @@ function forecastHtml(r){
     <div>Entry${p.type==='active' ? '' : ' (approx.)'}</div><div class="big">${fmt(p.entry)}</div>
     <div>Stop loss</div><div style="color:var(--down)">${fmt(p.sl)} <span class="muted">(${dist(risk)} away)</span></div>
     ${S.p.tpMulti ? p.tps.map((v, k) => `<div>TP${k+1}${k < p.hits ? ' ✓' : ''}</div><div style="color:var(--up)">${fmt(v)}
-      <span class="muted">(${(Math.abs(v - p.entry)/risk).toFixed(1)}R · close ${Math.round(sp[k]*100)}%${k === 0 && S.p.be ? ', then SL to entry' : ''}${k === 2 && p.tps.liq ? ' · resting liquidity' : ''})</span></div>`).join('')
+      <span class="muted">(${(Math.abs(v - p.entry)/risk).toFixed(1)}R · close ${Math.round(sp[k]*100)}%${k === 0 && S.p.be ? ', then SL to entry' : ''}${k === 2 && p.tps.trail ? ' · then trailing stop, no fixed target' : k === 2 && p.tps.liq ? ' · resting liquidity' : ''})</span></div>`).join('')
       : `<div>Take profit</div><div style="color:var(--up)">${fmt(p.tp)} <span class="muted">(${dist(Math.abs(p.tp - p.entry))} away)</span></div>`}
     <div>Risk : reward</div><div>1 : ${(reward/risk).toFixed(1)}</div>
     <div>Condition</div><div>${cond}</div>
     ${confRow}
+    ${p.gates && p.gates.length ? `<div>Filters</div><div style="display:grid;gap:2px">${p.gates.map(g =>
+      `<div>${g.ok === null ? '◻' : g.ok ? '<span class="good">✓</span>' : '<span class="bad">✗</span>'} ${esc(g.name)}</div>`).join('')}</div>` : ''}
+    ${newsRow()}
     <div>Track record</div><div>${record}</div>`;
+}
+function newsRow(){
+  if (!S.p.news) return '';
+  const nx = nextNews(curSymbol()), blocked = newsBlock(curSymbol());
+  const when = e => new Date(e.t).toLocaleString([], {weekday:'short', hour:'2-digit', minute:'2-digit'});
+  return `<div>News</div><div>${blocked ? `<span class="bad">✗ ${esc(blocked.cur)} ${esc(blocked.title)} (${when(blocked)}): no new trades</span>`
+    : nx ? `<span class="good">✓</span> next: ${esc(nx.cur)} ${esc(nx.title)}, ${when(nx)}` : `<span class="muted">${esc(NEWS.status)}</span>`}</div>`;
 }
 const esc = s => String(s).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 
@@ -977,7 +1130,7 @@ function draw(cs, r){
     const narrow = innerWidth < 700;
     const state = p.type === 'active' || narrow ? '' : p.type === 'limit' ? ' · LIMIT' : ' · IF BREAK';
     if (S.p.tpMulti){
-      tags.push({l:l0, p:T3, cls:'tp' + fade, text:`TP3 ${fmt(T3)}${p.hits >= 3 ? ' ✓' : ''}`});
+      tags.push({l:l0, p:T3, cls:'tp' + fade, text: p.tps.trail ? 'TP3 · trailing stop' : `TP3 ${fmt(T3)}${p.hits >= 3 ? ' ✓' : ''}`});
       tags.push({l:l0, p:p.tps[1], cls:'tpn' + fade, text:`TP2 ${fmt(p.tps[1])}${p.hits >= 2 ? ' ✓' : ''}`});
       tags.push({l:l0, p:p.tps[0], cls:'tpn' + fade, text:`TP1 ${fmt(p.tps[0])}${p.hits >= 1 ? ' ✓' : ''}`});
     } else tags.push({l:l0, p:p.tp, cls:'tp' + fade, text:`TP ${fmt(p.tp)}`});
@@ -1054,17 +1207,112 @@ const sgn = v => (v >= 0 ? '+' : '') + v.toFixed(2);
 const pfTxt = v => v === Infinity ? '∞' : v.toFixed(2);
 function tile(label, value, cls=''){ return `<div class="tile"><span>${label}</span><b class="${cls}">${value}</b></div>`; }
 
+// Currencies a symbol is long/short of, for the correlation guard
+function legs(sym){
+  const s = String(sym).toUpperCase().replace(/[^A-Z0-9/]/g, '');
+  if (s.includes('/')) return s.split('/').slice(0, 2);
+  const q = s.match(/(USDT|USDC|BUSD|USD|EUR|GBP|JPY|BTC)$/);
+  if (q && s.length > q[1].length) return [s.slice(0, -q[1].length), q[1].startsWith('USD') || q[1] === 'BUSD' ? 'USD' : q[1]];
+  if (/^[A-Z]{6}$/.test(s)) return [s.slice(0, 3), s.slice(3)];
+  return [s];
+}
+function sharesRisk(a, b){
+  const ea = legs(a.sym).map((c, k) => [c, k === 0 ? a.dir : -a.dir]);
+  const eb = new Map(legs(b.sym).map((c, k) => [c, k === 0 ? b.dir : -b.dir]));
+  return a.sym === b.sym || ea.some(([c, d]) => eb.get(c) === d);
+}
+// Replays trades in time order and drops the ones the live guards would block
+function applyGuards(trades, p){
+  const kept = [], skipped = {corr:0, max:0, daily:0, total:0};
+  for (const t of trades.slice().sort((a, b) => a.t - b.t)){
+    const open = kept.filter(k => k.t <= t.t && k.exitT > t.t);
+    const day = Math.floor(t.t/86400e3);
+    const dayR = kept.filter(k => Math.floor(k.exitT/86400e3) === day && k.exitT <= t.t).reduce((a, k) => a + k.R, 0);
+    let why = null;
+    if (open.some(k => k.sym === t.sym) || (p.corr && open.some(k => sharesRisk(k, t)))) why = 'corr';
+    else if (p.maxOpenBt > 0 && open.length >= p.maxOpenBt) why = 'max';
+    else if (p.dailyLossR > 0 && dayR <= -p.dailyLossR) why = 'daily';
+    if (why){ skipped[why]++; skipped.total++; } else kept.push(t);
+  }
+  return {kept, skipped};
+}
+
+// ---------- Walk-forward optimizer ----------
+// Each combination is tuned on the oldest 70% of every pair (in-sample) and judged on the newest 30% it never saw (out-of-sample).
+const OPT_GRID = {rr:[1.5, 2, 2.5, 3], tol:[0.1, 0.2, 0.3, 0.4], slAtr:[0.3, 0.5, 0.8], minConf:[0, 1, 2], adxMin:[0, 18, 25]};
+let OPT_RESULTS = null;
+async function runOptimizer(){
+  if (btRunning) return; btRunning = true;
+  const scope = $('bt_scope').value, n = +$('bt_n').value, cost = Math.max(0, +$('bt_cost').value || 0);
+  const syms = scope === 'wl' ? (S.wl[S.source] || []) : [curSymbol().trim()];
+  const data = [], errs = [];
+  try {
+    for (let k = 0; k < syms.length; k++){
+      $('bt_status').textContent = `Loading ${syms[k]} (${k+1}/${syms.length})…`;
+      try { const {cs, ctx} = await loadAndAnalyze(S.source, syms[k], S.tf, S.htf, n, true);
+        data.push({sym:syms[k], cs, ctx, split: cs[Math.floor(cs.length*0.7)].t}); }
+      catch(e){ errs.push(`${syms[k]}: ${e.message}`); }
+    }
+    if (!data.length){ $('bt_sum').innerHTML = `<p class="bad">${errs.map(esc).join('<br>') || 'No data.'}</p>`; return; }
+    const combos = [];
+    for (const rr of OPT_GRID.rr) for (const tol of OPT_GRID.tol) for (const slAtr of OPT_GRID.slAtr)
+      for (const minConf of OPT_GRID.minConf) for (const adxMin of OPT_GRID.adxMin) combos.push({rr, tol, slAtr, minConf, adxMin});
+    const evalCombo = combo => {
+      const p2 = {...S.p, ...combo}, is = [], oos = [];
+      for (const d of data){
+        const r = analyze(d.cs, p2, d.ctx.bias, d.ctx);
+        for (const s of r.signals){
+          if (s.i < p2.ema || s.outcome === 'open') continue;
+          const t = {sym:d.sym, dir:s.dir, t:s.t, exitT:d.cs[s.exitI].t, outcome:s.outcome, hits:s.hits, R:s.R - cost, bars:s.exitI - s.i};
+          if (t.exitT < d.split) is.push(t); else if (t.t >= d.split) oos.push(t);
+        }
+      }
+      const sum = x => { const k = applyGuards(x, p2).kept, st = btStats(k); return {n:st.n, win:st.winRate, avg:st.avg, pf:st.pf, dd:st.dd, net:st.net}; };
+      return {combo, is: sum(is), oos: sum(oos)};
+    };
+    const current = evalCombo({});
+    const res = [];
+    for (let k = 0; k < combos.length; k++){
+      res.push(evalCombo(combos[k]));
+      if (k % 12 === 0){ $('bt_status').textContent = `Testing combination ${k+1} of ${combos.length}…`; await new Promise(r => setTimeout(r, 0)); }
+    }
+    const minTrades = Math.max(15, 3*data.length);
+    const ranked = res.filter(x => x.is.n >= minTrades).sort((a, b) => (b.is.avg - a.is.avg) || (b.is.pf - a.is.pf)).slice(0, 10);
+    OPT_RESULTS = ranked;
+    const row = (x, label, apply) => `<tr><td>${label}</td>
+      <td class="muted">R:R ${x.combo.rr ?? S.p.rr} · tol ${x.combo.tol ?? S.p.tol} · SL ${x.combo.slAtr ?? S.p.slAtr} · conf ≥${x.combo.minConf ?? S.p.minConf} · ADX ≥${x.combo.adxMin ?? S.p.adxMin}</td>
+      <td>${x.is.n}</td><td>${pct(x.is.win)}</td><td class="${x.is.avg >= 0 ? 'good' : 'bad'}">${sgn(x.is.avg)}</td><td>${pfTxt(x.is.pf)}</td>
+      <td>${x.oos.n}</td><td>${x.oos.n ? pct(x.oos.win) : '–'}</td><td class="${x.oos.avg >= 0 ? 'good' : 'bad'}"><b>${x.oos.n ? sgn(x.oos.avg) : '–'}</b></td><td>${x.oos.n ? pfTxt(x.oos.pf) : '–'}</td>
+      <td>${apply}</td></tr>`;
+    const holds = ranked.filter(x => x.oos.n >= 5 && x.oos.avg > 0).length;
+    $('bt_eq').style.display = 'none';
+    $('bt_sum').innerHTML = `<p style="margin:0 0 8px">Tested <b>${combos.length}</b> combinations on ${data.length} pair${data.length > 1 ? 's' : ''}.
+      Ranked by average R on the <b>older 70%</b> (in-sample); the <b>newest 30%</b> (out-of-sample) shows whether it held up on data it was not tuned on.
+      <b>${holds} of the top ${ranked.length}</b> stayed profitable out-of-sample.</p>
+      ${!ranked.length ? `<p class="bad">No combination produced at least ${minTrades} in-sample trades. Use more candles or the whole watchlist.</p>` : ''}
+      <p class="muted" style="margin:0">Trust settings that do well on <b>both</b> halves and sit among similar good neighbours. A top in-sample score with a poor out-of-sample result is overfitting.
+      Risk guards and costs (${cost}R) are included.${errs.length ? ' Errors: ' + errs.map(esc).join('; ') : ''}</p>`;
+    $('bt_tables').innerHTML = `<h3>Walk-forward results</h3><div class="tscroll"><table>
+      <thead><tr><th>#</th><th>Settings</th><th>IS trades</th><th>IS TP1 %</th><th>IS avg R</th><th>IS PF</th><th>OOS trades</th><th>OOS TP1 %</th><th>OOS avg R</th><th>OOS PF</th><th></th></tr></thead><tbody>
+      ${row(current, 'Now', '<span class="muted">current</span>')}
+      ${ranked.map((x, k) => row(x, k+1, `<button data-apply="${k}">Apply</button>`)).join('')}
+      </tbody></table></div>`;
+    $('bt_status').textContent = `Optimizer done · ${S.tf} · split at ${fmtTime(data[0].split)}`;
+  } finally { btRunning = false; }
+}
+
 async function runBacktest(){
   if (btRunning) return; btRunning = true;
   const scope = $('bt_scope').value, n = +$('bt_n').value, cost = Math.max(0, +$('bt_cost').value || 0), risk = +$('bt_risk').value || 1;
   const syms = scope === 'wl' ? (S.wl[S.source] || []) : [curSymbol().trim()];
   const p = S.p, all = [], per = [], errs = [];
-  let first = null, last = null, open = 0;
+  let first = null, last = null, open = 0, ltfFrom = null;
   for (let k = 0; k < syms.length; k++){
     const sym = syms[k];
     $('bt_status').textContent = `Loading ${sym} (${k+1}/${syms.length})…` + (S.source==='twelvedata' ? ' Free plan: about 16 s per pair.' : '');
     try {
       const {cs, r} = await loadAndAnalyze(S.source, sym, S.tf, S.htf, n, true);
+      if (r.ltfStart !== null && isFinite(r.ltfStart)) ltfFrom = Math.max(ltfFrom || 0, r.ltfStart);
       first = first === null ? cs[0].t : Math.min(first, cs[0].t); last = Math.max(last || 0, cs[cs.length-1].t);
       const tr = [];
       for (const s of r.signals){
@@ -1073,9 +1321,13 @@ async function runBacktest(){
         tr.push({sym, dir:s.dir, t:s.t, exitT:cs[s.exitI].t, entry:s.entry, sl:s.sl, tp:s.tp, outcome:s.outcome,
           kind:s.kind, conf:s.conf, score:s.score, hits:s.hits, R:s.R - cost, bars:s.exitI - s.i});
       }
-      all.push(...tr); per.push({sym, candles:cs.length, ...btStats(tr.slice())});
+      all.push(...tr);
     } catch(e){ errs.push(`${sym}: ${e.message}`); }
   }
+  // portfolio risk guards, applied in time order as they would be live
+  const guard = applyGuards(all, p);
+  all.length = 0; all.push(...guard.kept);
+  for (const sym of syms){ const x = all.filter(t => t.sym === sym); if (x.length) per.push({sym, ...btStats(x)}); }
   const st = btStats(all);
   const be = (1 + cost) / (p.rr + 1);
   $('bt_status').textContent = `Done · ${syms.length} pair${syms.length>1?'s':''} · ${S.tf} · ${first ? fmtTime(first) + ' → ' + fmtTime(last) : ''}`;
@@ -1098,6 +1350,8 @@ async function runBacktest(){
     </div>
     <p class="muted" style="margin:0">${p.tpMulti ? `Exits: ${p.split} at TP1 (${p.tp1R}R) / TP2 (strategy target) / TP3 (${p.tp3Mode === 'liq' ? 'next liquidity, else ' + p.tp3R + 'R' : p.tp3R + 'R'})${p.be ? ', stop to break-even after TP1' : ''}. A trade counts as a win once TP1 is hit.` : p.strategy==='sr' && p.tpMode==='zone' ? 'Targets are the next S/R level, so reward varies per trade.' : `At 1:${p.rr} R:R with ${cost}R costs you need a win rate above ${pct(be)} to make money.`}
       ${open ? `${open} trade${open>1?'s':''} still open at the end were left out.` : ''}
+      ${guard.skipped.total ? `Risk guards skipped ${guard.skipped.total} trade${guard.skipped.total > 1 ? 's' : ''} (already in that pair or a correlated one: ${guard.skipped.corr}, max open: ${guard.skipped.max}, daily loss limit: ${guard.skipped.daily}).` : ''}
+      ${p.ltfConfirm ? `LTF confirmation: lower-timeframe data starts ${ltfFrom ? fmtTime(ltfFrom) : '(none)'}; earlier signals can't be confirmed and are not counted.` : ''}
       Return is simple (not compounded). Strategy: ${STRAT[p.strategy]}. SMC entry zone: ${p.poi}${p.choch ? ' + CHoCH' : ''}, min confluence ${p.minConf}${(p.req||[]).length ? ', required: ' + p.req.join(', ') : ''}. Settings: ${esc(p.trend)} trend, HTF ${p.useHtf ? S.htf : 'off'}, swing ${p.swing}, tolerance ${p.tol}×ATR, SL buffer ${p.slAtr}×ATR.</p>
     ${errs.length ? `<p class="bad">${errs.map(esc).join('<br>')}</p>` : ''}
     ${S.source==='demo' ? '<p class="bad" style="margin:8px 0 0"><b>Demo data is made up and much trendier than real markets. Ignore these numbers and switch to Binance or Twelve Data for a real test.</b></p>' : ''}`;
@@ -1136,7 +1390,12 @@ async function runBacktest(){
     ${[0,1,2,3,4].map(sc => { const x = smcT.filter(t => sc === 4 ? t.score >= 4 : t.score === sc); return `<tr><td>${sc === 4 ? '4 or more' : sc}</td><td>${grp(x)}</td></tr>`; }).join('')}
     </tbody></table></div>
     <p class="muted" style="margin:6px 0 0">To test a filter, tick it as required in Settings and run again. Small samples (under ~30 trades) are mostly noise.</p>` : '';
-  $('bt_tables').innerHTML = confTable + perRows + (list.length ? `<h3>Trades (newest first${all.length > 300 ? ', last 300' : ''})</h3><div class="tscroll"><table>
+  const sessions = [['Asia 00–07 UTC', 0, 7], ['London 07–12', 7, 12], ['New York 12–17', 12, 17], ['Late 17–24', 17, 24]];
+  const sessTable = all.length >= 5 ? `<h3>By session (entry time)</h3><div class="tscroll"><table>
+    <thead><tr><th>Session</th><th>Trades</th><th>Win %</th><th>Avg R</th></tr></thead><tbody>
+    ${sessions.map(([name, a, b]) => { const x = all.filter(t => { const h = new Date(t.t).getUTCHours(); return h >= a && h < b; });
+      return `<tr><td>${name}</td><td>${grp(x)}</td></tr>`; }).join('')}</tbody></table></div>` : '';
+  $('bt_tables').innerHTML = confTable + sessTable + perRows + (list.length ? `<h3>Trades (newest first${all.length > 300 ? ', last 300' : ''})</h3><div class="tscroll"><table>
     <thead><tr><th>Time</th>${per.length > 1 ? '<th>Pair</th>' : ''}<th>Type</th><th>Side</th><th>Entry</th><th>SL</th><th>TP</th><th>Result</th><th>R</th><th>Candles</th></tr></thead><tbody>
     ${list.map(t => `<tr><td>${fmtTime(t.t)}</td>${per.length > 1 ? `<td>${esc(t.sym)}</td>` : ''}<td class="muted">${t.kind}${t.conf ? '<br>' + confTags(t) : ''}</td>
       <td><span class="pill ${t.dir===1?'up':'down'}">${t.dir===1?'BUY':'SELL'}</span></td>
@@ -1194,6 +1453,7 @@ async function scanCurrent(){
       <td>${s.outcome==='open' ? `<span class="pill warn">Open${s.hits ? ' · TP' + s.hits + ' ✓' : ''}</span>`
         : s.hits ? `<span class="pill up">${S.p.tpMulti ? 'TP' + s.hits : 'TP'} hit</span>` : `<span class="pill down">${s.R > -0.01 && s.R < 0.01 ? 'BE' : 'SL hit'}</span>`}
         ${s.R !== null ? `<br><span class="${s.R >= 0 ? 'good' : 'bad'}">${sgn(s.R)}R</span>` : ''}</td></tr>`).join('') || '<tr><td colspan="6" class="muted">No signals in loaded history</td></tr>';
+    LAST_SWING[brokerSymbol(sym)] = {lo: r.loAt[r.loAt.length-1], hi: r.hiAt[r.hiAt.length-1]};
     checkNew(S.source, sym, S.tf, r);
     setStatus(`Updated ${new Date().toLocaleTimeString()} · ${cs.length} candles`);
   } catch(e){ setStatus('Error'); $('cur').innerHTML = `<div>Error</div><div style="color:var(--down)">${esc(e.message)}</div>`; }
@@ -1218,7 +1478,8 @@ async function scanAll(){
     const sym = list[k];
     setStatus(`Watchlist ${k+1}/${list.length}: ${sym}`);
     const key = [S.source, sym, S.tf, S.htf].join('|');
-    try { const {r} = await scanSymbol(S.source, sym, S.tf, S.htf); wlResults[key] = {r}; checkNew(S.source, sym, S.tf, r); }
+    try { const {r} = await scanSymbol(S.source, sym, S.tf, S.htf); wlResults[key] = {r};
+      LAST_SWING[brokerSymbol(sym)] = {lo: r.loAt[r.loAt.length-1], hi: r.hiAt[r.hiAt.length-1]}; checkNew(S.source, sym, S.tf, r); }
     catch(e){ wlResults[key] = {err:e.message}; }
     renderWatchlist();
   }
@@ -1234,7 +1495,9 @@ function checkNew(source, sym, tf, r){
   if (key in seen && t > seen[key] && r.lastAgo <= 1){
     const msg = `${sym} ${tf}: ${r.last.dir===1?'BUY':'SELL'} @ ${fmt(r.last.entry)} · SL ${fmt(r.last.sl)} · ${S.p.tpMulti ? tpList(r.last.tps) : 'TP ' + fmt(r.last.tp)}`;
     toast(msg); beep();
-    if (S.broker.auto && BROKER.conn && source === S.source) brokerExecute(sym, r.last, false);
+    const nb = newsBlock(sym);
+    if (nb) toast(`${sym}: not traded, high-impact ${nb.cur} news "${nb.title}" nearby.`);
+    else if (S.broker.auto && BROKER.conn && source === S.source) brokerExecute(sym, r.last, false);
     try { if (Notification.permission === 'granted') new Notification('SMC signal', {body:msg}); } catch(e){}
   }
   seen[key] = Math.max(seen[key]||0, t);
@@ -1275,8 +1538,18 @@ $('tabSig').onclick = () => setTab('sig');
 $('tabTv').onclick = () => setTab('tv');
 $('tabBt').onclick = () => setTab('bt');
 $('bt_run').onclick = runBacktest;
+$('bt_opt').onclick = runOptimizer;
+$('bt_tables').onclick = e => {
+  const k = e.target.dataset && e.target.dataset.apply; if (k === undefined || !OPT_RESULTS) return;
+  Object.assign(S.p, OPT_RESULTS[+k].combo); save(); cache.clear();
+  for (const key in wlResults) delete wlResults[key];
+  e.target.textContent = 'Applied'; toast('Settings applied. Run the backtest again to see full results.'); scanCurrent();
+};
 
-const F = [['s_tpmulti','tpMulti',v=>v==='1'],['s_tp1r','tp1R',Number],['s_tp3mode','tp3Mode',String],['s_tp3r','tp3R',Number],
+const F = [['s_htfmode','htfMode',String],['s_htfpd','htfPd',v=>v==='1'],['s_adx','adxMin',Number],['s_ltf','ltfConfirm',v=>v==='1'],
+  ['s_vollo','volLo',Number],['s_volhi','volHi',Number],['s_news','news',v=>v==='1'],['s_newsb','newsBefore',Number],['s_newsa','newsAfter',Number],
+  ['s_corr','corr',v=>v==='1'],['s_maxopenbt','maxOpenBt',Number],['s_dayloss','dailyLossR',Number],
+  ['s_tpmulti','tpMulti',v=>v==='1'],['s_tp1r','tp1R',Number],['s_tp3mode','tp3Mode',String],['s_tp3r','tp3R',Number],
   ['s_split','split',String],['s_be','be',v=>v==='1'],['s_annot','view',String],['s_poi','poi',String],['s_choch','choch',v=>v==='1'],['s_disp','dispAtr',Number],['s_session','session',String],['s_minconf','minConf',Number],
   ['s_strategy','strategy',String],['s_srtouch','srTouches',Number],['s_zonew','zoneW',Number],['s_srlook','srLook',Number],
   ['s_srtrend','srTrend',String],['s_tpmode','tpMode',String],['s_minrr','minRR',Number],['s_swing','swing',Number],['s_trend','trend',String],['s_ema','ema',Number],['s_htfema','htfEma',Number],
@@ -1301,6 +1574,32 @@ $('saveSettings').onclick = () => {
   renderHeader(); scanCurrent();
 };
 $('notifyBtn').onclick = async () => { try { const p = await Notification.requestPermission(); toast('Notifications: ' + p); } catch(e){ toast('Notifications not supported here'); } };
+
+// ======================= News filter =======================
+// High-impact events from a free public economic calendar (this week only), refreshed hourly.
+const NEWS = {events:[], at:0, status:'not loaded yet'};
+async function loadNews(){
+  if (!S.p.news) return;
+  try {
+    const r = await fetch('https://nfs.faireconomy.media/ff_calendar_thisweek.json');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const j = await r.json();
+    NEWS.events = j.filter(e => /high/i.test(e.impact || '')).map(e => ({t: Date.parse(e.date), cur: String(e.country || '').toUpperCase(), title: e.title}))
+      .filter(e => !isNaN(e.t));
+    NEWS.status = `${NEWS.events.length} high-impact events this week`;
+  } catch(e){ NEWS.status = 'calendar unavailable, news filter is not active'; }
+  NEWS.at = Date.now();
+}
+function newsBlock(sym, t = Date.now()){
+  if (!S.p.news || !NEWS.events.length) return null;
+  const cur = legs(sym);
+  return NEWS.events.find(e => cur.includes(e.cur) && t >= e.t - S.p.newsBefore*60e3 && t <= e.t + S.p.newsAfter*60e3) || null;
+}
+function nextNews(sym){
+  const cur = legs(sym), now = Date.now();
+  return NEWS.events.filter(e => cur.includes(e.cur) && e.t >= now - S.p.newsAfter*60e3).sort((a, b) => a.t - b.t)[0] || null;
+}
+loadNews(); setInterval(loadNews, 3600e3);
 
 // ======================= Broker (MT5 via MetaApi) =======================
 const BROKER = {api:null, account:null, conn:null, info:null, positions:[], status:'Not connected', timer:null, busy:false};
@@ -1393,6 +1692,8 @@ async function brokerDisconnect(){
 async function brokerRefresh(){
   if (!BROKER.conn) return;
   BROKER.info = await BROKER.conn.getAccountInformation();
+  const dk = new Date().toISOString().slice(0, 10);                     // remember the balance at the start of each UTC day
+  if (!S.broker.day || S.broker.day.key !== dk){ S.broker.day = {key:dk, start:BROKER.info.balance}; save(); }
   BROKER.positions = await BROKER.conn.getPositions();
   renderBroker();
 }
@@ -1416,6 +1717,15 @@ async function brokerExecute(sym, sig, manual){
     if (mine.some(p => p.symbol === bs)) return say(`skipped, a trade is already open on ${bs}`);
     const groups = new Set(mine.map(p => (p.comment || String(p.id)).split(' ')[0])).size;
     if (groups >= S.broker.maxOpen) return say(`skipped, max open trades (${S.broker.maxOpen}) reached`);
+    if (S.broker.dayLossPct > 0 && S.broker.day && info.equity <= S.broker.day.start*(1 - S.broker.dayLossPct/100))
+      return say(`skipped, daily loss limit (${S.broker.dayLossPct}%) reached`, true);
+    if (S.p.corr){
+      const strip = x => S.broker.suffix ? x.replace(S.broker.suffix, '') : x;
+      const clash = mine.find(p => sharesRisk({sym:strip(p.symbol), dir:/BUY/.test(p.type) ? 1 : -1}, {sym, dir:sig.dir}));
+      if (clash) return say(`skipped, correlated with the open ${clash.symbol} trade`);
+    }
+    const nb = newsBlock(sym);
+    if (nb) return say(`skipped, high-impact ${nb.cur} news "${nb.title}" at ${new Date(nb.t).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`);
     const [price, spec] = await Promise.all([conn.getSymbolPrice(bs), conn.getSymbolSpecification(bs)]);
     const entry = d === 1 ? price.ask : price.bid;
     const tps = S.p.tpMulti ? sig.tps : [sig.tp, sig.tp, sig.tp];
@@ -1435,14 +1745,15 @@ async function brokerExecute(sym, sig, manual){
     parts[2] = floorStep(vol - parts[0] - parts[1], spec.volumeStep);
     if (S.p.tpMulti && hedging && parts.every(v => v >= spec.minVolume)){
       const ids = [];
-      for (let k = 0; k < 3; k++){ const res = await order(parts[k], T[k], `${tag} TP${k+1}`); ids.push(String(res.positionId || res.orderId)); }
+      const trailing = S.p.tp3Mode === 'trail';
+      for (let k = 0; k < 3; k++){ const res = await order(parts[k], k === 2 && trailing ? undefined : T[k], `${tag} TP${k+1}`); ids.push(String(res.positionId || res.orderId)); }
       S.broker.managed.push({type:'group', ids, dir:d, be:false});
     } else {
-      const res = await order(vol, S.p.tpMulti ? T[2] : T[1], `${tag} ${S.p.tpMulti ? 'TP1-3' : 'TP'}`);
+      const res = await order(vol, S.p.tpMulti ? (S.p.tp3Mode === 'trail' ? undefined : T[2]) : T[1], `${tag} ${S.p.tpMulti ? 'TP1-3' : 'TP'}`);
       if (S.p.tpMulti) S.broker.managed.push({type:'single', id:String(res.positionId || res.orderId), dir:d, tp1:T[0], tp2:T[1], v0:vol, stage:0});
     }
     save();
-    blog(`${d === 1 ? 'BUY' : 'SELL'} ${vol} lots ${bs} @ ~${fmt(entry)} · SL ${fmt(sl)} · ${S.p.tpMulti ? tpList(T) : 'TP ' + fmt(T[1])}${manual ? ' (manual)' : ' (auto)'}`);
+    blog(`${d === 1 ? 'BUY' : 'SELL'} ${vol} lots ${bs} @ ~${fmt(entry)} · SL ${fmt(sl)} · ${S.p.tpMulti ? (S.p.tp3Mode === 'trail' ? tpList(T.slice(0, 2)) + ' · TP3 trailing' : tpList(T)) : 'TP ' + fmt(T[1])}${manual ? ' (manual)' : ' (auto)'}`);
     toast(`Sent to MT5: ${d === 1 ? 'BUY' : 'SELL'} ${vol} ${bs}`);
     await brokerRefresh();
     return true;
@@ -1464,6 +1775,7 @@ async function manageTrades(){
           for (const id of open){ const p = pos.get(id); await conn.modifyPosition(id, p.openPrice, p.takeProfit); }
           m.be = true; blog(`${pos.get(open[0]).symbol}: TP1 hit, stop moved to entry`);
         }
+        if (S.p.tp3Mode === 'trail' && !pos.has(m.ids[1]) && pos.has(m.ids[2])) await trailPosition(pos.get(m.ids[2]), m.dir);
         keep.push(m);
       } else {
         const p = pos.get(m.id);
@@ -1479,12 +1791,23 @@ async function manageTrades(){
           const part = floorStep(m.v0*sp[1], spec.volumeStep);
           if (part >= spec.minVolume && part < p.volume) await conn.closePositionPartially(m.id, +part.toFixed(8), {});
           m.stage = 2; blog(`${p.symbol}: TP2 hit, closed ${Math.round(sp[1]*100)}%`);
-        }
+        } else if (m.stage === 2 && S.p.tp3Mode === 'trail') await trailPosition(p, m.dir);
         keep.push(m);
       }
     } catch(e){ keep.push(m); blog('trade management: ' + errText(e), true); }
   }
   S.broker.managed = keep; save();
+}
+
+// Moves a runner's stop behind the latest confirmed swing of its symbol (from the most recent scan)
+const LAST_SWING = {};
+async function trailPosition(p, dir){
+  const sw = LAST_SWING[p.symbol]; if (!sw) return;
+  const lvl = dir === 1 ? sw.lo : sw.hi; if (lvl == null) return;
+  const better = dir === 1 ? lvl > (p.stopLoss || -Infinity) && lvl < p.currentPrice : lvl < (p.stopLoss || Infinity) && lvl > p.currentPrice;
+  if (!better) return;
+  await BROKER.conn.modifyPosition(String(p.id), lvl, p.takeProfit);
+  blog(`${p.symbol}: trailing stop moved to ${fmt(lvl)}`);
 }
 
 $('bPos').onclick = async e => {
@@ -1496,7 +1819,7 @@ $('bPos').onclick = async e => {
 
 function brokerForm(){
   $('b_token').value = S.broker.token; $('b_remember').value = S.broker.remember ? '1' : '0';
-  $('b_auto').value = S.broker.auto ? '1' : '0'; $('b_risk').value = S.broker.risk; $('b_max').value = S.broker.maxOpen;
+  $('b_auto').value = S.broker.auto ? '1' : '0'; $('b_risk').value = S.broker.risk; $('b_max').value = S.broker.maxOpen; $('b_dayloss').value = S.broker.dayLossPct;
   $('b_suffix').value = S.broker.suffix; $('b_map').value = S.broker.map;
   if (S.broker.accountId && ![...$('b_account').options].some(o => o.value === S.broker.accountId))
     $('b_account').insertAdjacentHTML('beforeend', `<option value="${esc(S.broker.accountId)}">Saved account ${esc(S.broker.accountId.slice(0, 8))}…</option>`);
@@ -1505,7 +1828,7 @@ function brokerForm(){
 function brokerSaveForm(){
   S.broker.token = $('b_token').value.trim(); S.broker.remember = $('b_remember').value === '1';
   S.broker.auto = $('b_auto').value === '1'; S.broker.risk = Math.max(0.05, +$('b_risk').value || 0.5);
-  S.broker.maxOpen = Math.max(1, +$('b_max').value || 1); S.broker.suffix = $('b_suffix').value.trim(); S.broker.map = $('b_map').value;
+  S.broker.maxOpen = Math.max(1, +$('b_max').value || 1); S.broker.dayLossPct = Math.max(0, +$('b_dayloss').value || 0); S.broker.suffix = $('b_suffix').value.trim(); S.broker.map = $('b_map').value;
   S.broker.accountId = $('b_account').value || S.broker.accountId;
   if (BROKER.api && BROKER.tokenUsed !== S.broker.token) BROKER.api = null;
   save(); renderBroker();
