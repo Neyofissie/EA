@@ -140,3 +140,13 @@ Settings → **SMC mode**. **Fast** is the default.
 - **Classic:** the original behaviour. Swing-length structure and the selected trend filter (EMA / structure / last break). Classic gives the same backtest results as before this change.
 
 Fast mode produces more setups. Compare both on your pairs with the Backtest or the walk-forward optimizer.
+
+## High-probability alerts and phone notifications
+- **Settings → Alerts:** *Only alert high-probability setups* (on by default). An alert fires only when the chart's past setups reached TP1 at least **70%** of the time, with at least **8** past setups. Both numbers can be changed. The same rule can also apply to MT5 auto-trading.
+- **What gets the rule:** toasts, the sound, system notifications and automatic Telegram posts. Every alert shows the rate, e.g. "75% of 12 past setups hit TP1". This is history on that pair / timeframe / settings, not a guarantee.
+- **Enable alerts on this device** is under *Account* (or *Settings → Enable notifications*).
+- **Installable app:** the app now ships with `sw.js`, `manifest.webmanifest` and two icons.
+  - **Upload the whole `webapp` folder** to Netlify, not only `index.html`.
+  - Android needs the service worker for notifications.
+  - On iPhone, add the app to the Home Screen and open it from there before enabling alerts (iOS 16.4+).
+- **Limits:** a web page can only scan while it is open. Phones pause pages in the background or when locked. For alerts when you are away, leave the app open with *Auto* on, on a computer (or a phone kept on, plugged in, with the app in front), and turn on Telegram auto-post. Telegram then pushes to your phone.
