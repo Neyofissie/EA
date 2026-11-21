@@ -2,7 +2,12 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0d1017">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SMC Scanner">
 <title>SMC + S/R Scanner</title>
 <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
 <style>
@@ -111,47 +116,171 @@ dialog{overflow-x:hidden}
   .ovr span{font-size:11px}
   .legend .px{font-size:14px}
 }
+/* ---------- shared pieces ---------- */
+.ico{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.iconbtn{display:inline-flex;align-items:center;gap:6px}
+.rail{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.symbox{position:relative;display:flex;align-items:center}
+.symbox .ico{position:absolute;left:9px;width:16px;height:16px;color:var(--muted);pointer-events:none}
+#symbol{padding-left:30px}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+button:disabled{opacity:.7;cursor:progress}
+#scanBtn.busy .ico{animation:spin .9s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){#scanBtn.busy .ico{animation:none}}
+.mobonly,.bnav,.fcmini{display:none}
+.dhead{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+.dhead h3{margin:0}
+.xbtn{width:36px;height:36px;padding:0;border-radius:999px;font-size:16px;line-height:1}
+
+/* ---------- phone & small tablet: app layout ---------- */
+@media (max-width:900px){
+  :root{--nav:60px}
+  html,body{overscroll-behavior-y:none}
+  body{padding-bottom:calc(var(--nav) + env(safe-area-inset-bottom));-webkit-tap-highlight-color:transparent}
+  input,select,textarea{font-size:16px}                       /* stops iOS zooming into fields */
+  button,select,input{min-height:40px}
+  .deskonly{display:none!important}
+  .deskonly-i{display:none}
+  .mobonly{display:block}
+
+  header{position:sticky;top:0;z-index:30;display:grid;grid-template-columns:1fr auto auto;gap:8px;
+    padding:8px max(12px, env(safe-area-inset-right)) 0 max(12px, env(safe-area-inset-left));
+    padding-top:calc(8px + env(safe-area-inset-top));background:rgba(21,26,35,.96);backdrop-filter:saturate(1.4) blur(10px)}
+  header h1,header .grow{display:none}
+  .symbox{grid-column:1;grid-row:1}
+  #symbol{width:100%;border-radius:999px;height:42px;font-weight:600;letter-spacing:.02em;text-transform:uppercase}
+  .iconbtn{width:42px;height:42px;padding:0;justify-content:center;border-radius:999px}
+  .iconbtn span{display:none}
+  #scanBtn{grid-column:2;grid-row:1} #settingsBtn{grid-column:3;grid-row:1}
+  .rail{grid-column:1/-1;grid-row:2;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin:0 calc(-1*max(12px, env(safe-area-inset-left))) 0;
+    padding:8px max(12px, env(safe-area-inset-left)) 10px;scroll-snap-type:x proximity;
+    -webkit-mask-image:linear-gradient(90deg,transparent 0,#000 12px,#000 calc(100% - 24px),transparent)}
+  .rail::-webkit-scrollbar{display:none}
+  .rail > *{flex:none;scroll-snap-align:start}
+  .tfs{gap:4px}
+  .tfs button{min-width:42px;height:36px;min-height:36px;border-radius:999px;padding:0 10px;font-weight:600}
+  .rail select{height:36px;min-height:36px;border-radius:999px;padding:0 10px;font-size:14px;max-width:190px}
+  .rail .chip-l{display:flex;align-items:center;gap:6px;font-size:13px}
+
+  main{display:block;padding:0;height:auto}
+  .card{border-radius:14px;margin:10px max(12px, env(safe-area-inset-left))}
+  .chartwrap{border-radius:0;border-left:0;border-right:0;margin:0;min-height:0}
+  .tabs{flex-wrap:nowrap;padding:6px 12px;gap:6px}
+  .tabs button{height:34px;min-height:34px;border-radius:999px;padding:0 12px;font-size:13px}
+  .tabs .status{font-size:11px;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+  #chart,#tv{min-height:280px;flex:none}
+  .legend{left:8px;top:8px;gap:6px}
+  .legend .chip{padding:3px 8px;font-size:12px;border-radius:7px}
+  .fcmini{display:flex;align-items:center;gap:8px;width:100%;min-height:52px;border:0;border-top:1px solid var(--line);border-radius:0;
+    background:var(--panel2);padding:8px 14px;text-align:left;font-size:13px;font-variant-numeric:tabular-nums;overflow:hidden}
+  .fcmini b{font-size:14px}
+  .fcmini .sep{color:var(--muted)}
+  .fcmini .go{margin-left:auto;color:var(--muted);font-size:18px}
+
+  /* one section at a time, picked in the bottom bar */
+  body[data-mview] aside > .card{display:none}
+  body[data-mview="setup"] .chartwrap, body[data-mview="scanner"] .chartwrap, body[data-mview="account"] .chartwrap{display:none}
+  body[data-mview="setup"] aside > .c-forecast, body[data-mview="setup"] aside > .c-current, body[data-mview="setup"] aside > .c-hist,
+  body[data-mview="scanner"] aside > .c-watch, body[data-mview="account"] aside > .c-account, body[data-mview="account"] aside > .c-broker{display:block}
+  body[data-mview="backtest"] .tabs, body[data-mview="backtest"] .fcmini{display:none}
+  body[data-mview="chart"] .tabs .status{flex:1}
+  aside{gap:0;overflow:visible;padding-bottom:8px}
+
+  /* watchlist rows become two-line cards */
+  .c-watch thead{display:none}
+  #wl tr{display:grid;grid-template-columns:auto auto minmax(0,1fr) auto;grid-template-areas:"sym sym sym win" "t h s s";
+    align-items:center;gap:6px 8px;padding:12px 14px;border-bottom:1px solid var(--line)}
+  #wl td{border:0;padding:0;white-space:nowrap}
+  #wl td:nth-child(1){grid-area:sym;font-size:15px}
+  #wl td:nth-child(2){grid-area:t} #wl td:nth-child(3){grid-area:h} #wl td:nth-child(4){grid-area:s;min-width:0;overflow:hidden}
+  #wl td:nth-child(5){grid-area:win;color:var(--muted);font-size:13px}
+  #wl td:nth-child(2)::before{content:'Trend ';color:var(--muted);font-size:11px}
+  #wl td:nth-child(3)::before{content:'HTF ';color:var(--muted);font-size:11px}
+  #wl td:nth-child(5):not(:empty)::after{content:' win';}
+  #wl td[colspan]{grid-column:1/-1;grid-row:2}
+  #wl td .pill{display:inline-block;border-radius:8px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle}
+  #wl td:nth-child(4){text-align:right}
+  #wl tr:active{background:var(--panel2)}
+  .kv{gap:8px 14px}
+
+  #bt{padding:12px}
+  .btbar{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .btbar input,.btbar select{width:100%}
+  .btbar button{width:100%;height:44px}
+  #bt_status{grid-column:1/-1}
+  .tiles{grid-template-columns:repeat(2,1fr)}
+
+  .bnav{display:grid;grid-template-columns:repeat(5,1fr);position:fixed;left:0;right:0;bottom:0;z-index:40;
+    padding:4px max(6px, env(safe-area-inset-left)) env(safe-area-inset-bottom);background:rgba(21,26,35,.97);
+    backdrop-filter:saturate(1.4) blur(10px);border-top:1px solid var(--line)}
+  .bnav button{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;height:var(--nav);
+    background:none;border:0;border-radius:12px;color:var(--muted);font-size:11px;font-weight:600;padding:0}
+  .bnav button .ico{width:22px;height:22px}
+  .bnav button.on{color:#fff}
+  .bnav button.on .ico{color:var(--accent)}
+  .bnav .dot{position:absolute;top:10px;right:calc(50% - 16px);width:8px;height:8px;border-radius:50%;background:var(--warn);box-shadow:0 0 0 2px var(--panel)}
+
+  dialog{width:100%;max-width:100%;height:100dvh;max-height:100dvh;margin:0;border:0;border-radius:0;
+    padding:calc(14px + env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left))}
+  dialog .form{grid-template-columns:1fr}
+  dialog .actions{position:sticky;bottom:0;background:var(--panel);margin:16px -16px 0;padding:12px 16px calc(12px + env(safe-area-inset-bottom));
+    border-top:1px solid var(--line);display:grid!important;grid-template-columns:1fr 1fr;gap:8px}
+  dialog .actions button{height:46px}
+  dialog .actions .primary{grid-column:1/-1;order:-1}
+
+  .toast{left:12px;right:12px;bottom:calc(var(--nav) + 12px + env(safe-area-inset-bottom))}
+  .toast div{max-width:none}
+}
 </style>
 </head>
 <body>
-<header>
+<header id="hdr">
   <h1>SMC + S/R Scanner</h1>
-  <select id="strategy" title="Strategy">
-    <option value="smc">SMC: BOS + retest</option>
-    <option value="sr">Support &amp; Resistance</option>
-    <option value="both">Both strategies</option>
-  </select>
-  <select id="source" title="Data source">
-    <option value="binance">Crypto (Binance)</option>
-    <option value="twelvedata">Forex / Gold / Indices (Twelve Data)</option>
-    <option value="demo">Demo data</option>
-  </select>
-  <input id="symbol" list="symlist" size="11" title="Symbol">
+  <div class="symbox">
+    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+    <input id="symbol" list="symlist" size="11" title="Symbol" aria-label="Symbol" autocomplete="off" autocapitalize="characters" spellcheck="false" enterkeyhint="search">
+  </div>
   <datalist id="symlist"></datalist>
-  <div class="tfs" id="tfs"></div>
-  <label class="muted">HTF <select id="htf"></select></label>
-  <button class="primary" id="scanBtn">Scan chart</button>
-  <select id="auto" title="Auto re-scan">
-    <option value="0">Auto: off</option>
-    <option value="60">Auto: 1 min</option>
-    <option value="300">Auto: 5 min</option>
-    <option value="900">Auto: 15 min</option>
-  </select>
+  <button class="primary iconbtn" id="scanBtn" aria-label="Scan chart">
+    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.6-6.4L21 8"/><path d="M21 3v5h-5"/></svg><span>Scan chart</span></button>
+  <div class="rail" id="rail">
+    <div class="tfs" id="tfs"></div>
+    <label class="muted chip-l">HTF <select id="htf"></select></label>
+    <select id="strategy" title="Strategy" aria-label="Strategy">
+      <option value="smc">SMC: BOS + retest</option>
+      <option value="sr">Support &amp; Resistance</option>
+      <option value="both">Both strategies</option>
+    </select>
+    <select id="source" title="Data source" aria-label="Data source">
+      <option value="binance">Crypto (Binance)</option>
+      <option value="twelvedata">Forex / Gold / Indices (Twelve Data)</option>
+      <option value="demo">Demo data</option>
+    </select>
+    <select id="auto" title="Auto re-scan" aria-label="Auto re-scan">
+      <option value="0">Auto: off</option>
+      <option value="60">Auto: 1 min</option>
+      <option value="300">Auto: 5 min</option>
+      <option value="900">Auto: 15 min</option>
+    </select>
+  </div>
   <span class="grow"></span>
-  <button id="brokerBtn">Broker · MT5</button>
-  <button id="settingsBtn">Settings</button>
+  <button id="brokerBtn" class="deskonly">Broker · MT5</button>
+  <button id="settingsBtn" class="iconbtn" aria-label="Settings">
+    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span>Settings</span></button>
 </header>
 
 <main>
   <section class="card chartwrap">
     <div class="tabs">
-      <button id="tabSig" class="on">Signals chart</button>
-      <button id="tabTv">TradingView chart</button>
-      <button id="tabBt">Backtest</button>
+      <button id="tabSig" class="on">Signals<span class="deskonly-i"> chart</span></button>
+      <button id="tabTv">TradingView<span class="deskonly-i"> chart</span></button>
+      <button id="tabBt" class="deskonly">Backtest</button>
       <button id="viewBtn" title="Switch between a clean chart and all labels">View: Clean</button>
       <span class="status" id="status">Ready</span>
     </div>
     <div id="chart"></div>
+    <button id="fcMini" class="fcmini" type="button" aria-label="Open the trade plan"><span class="muted">Scan a chart to see the trade plan</span></button>
     <div id="tv"></div>
     <div id="tvNote" class="muted" style="display:none;padding:8px 12px;font-size:12px;border-top:1px solid var(--line)">
       TradingView's embedded chart can't show this app's setups; TradingView doesn't allow websites to draw on it.
@@ -174,29 +303,37 @@ dialog{overflow-x:hidden}
   </section>
 
   <aside>
-    <div class="card">
+    <div class="card c-forecast">
       <h2>Forecast <span class="r" id="fcSym"></span></h2>
       <div class="kv" id="fc"><div>Setup</div><div class="muted">Press “Scan chart”</div></div>
       <p class="muted" style="margin:0;padding:0 12px 12px;font-size:12px">Projected from the strategy rules and past results on this chart. A plan, not a guarantee.</p>
     </div>
-    <div class="card">
+    <div class="card c-account mobonly">
+      <h2>Account &amp; settings</h2>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:12px">
+        <button class="primary" id="mBroker" type="button">Connect MT5</button>
+        <button id="mSettings" type="button">Strategy settings</button>
+      </div>
+      <p class="muted" style="margin:0;padding:0 12px 12px;font-size:12px">Tip: add this page to your home screen (Share → Add to Home Screen) to open it full-screen like an app.</p>
+    </div>
+    <div class="card c-broker">
       <h2>Broker · MT5 <span class="r" id="bAuto"></span></h2>
       <div class="kv" id="bInfo"><div>Status</div><div class="muted">Not connected. Press “Broker · MT5” to link your account.</div></div>
-      <div style="overflow:auto"><table><thead><tr><th>Symbol</th><th>Side</th><th>Lots</th><th>P/L</th><th></th></tr></thead><tbody id="bPos"></tbody></table></div>
+      <div style="overflow:auto" id="bPosWrap" hidden><table><thead><tr><th>Symbol</th><th>Side</th><th>Lots</th><th>P/L</th><th></th></tr></thead><tbody id="bPos"></tbody></table></div>
       <div id="bLog" class="muted" style="font-size:12px;padding:8px 12px;max-height:120px;overflow:auto"></div>
     </div>
-    <div class="card">
+    <div class="card c-current">
       <h2>Current chart <span class="r" id="curSym"></span></h2>
       <div class="kv" id="cur"><div>Status</div><div class="muted">Press “Scan chart”</div></div>
     </div>
-    <div class="card">
+    <div class="card c-watch">
       <h2>Watchlist scanner <span class="r"><button id="scanAllBtn">Scan all</button></span></h2>
       <div style="overflow:auto"><table>
         <thead><tr><th>Symbol</th><th>Trend</th><th>HTF</th><th>Setup</th><th>Win %</th></tr></thead>
         <tbody id="wl"></tbody>
       </table></div>
     </div>
-    <div class="card">
+    <div class="card c-hist">
       <h2>Signals on this chart</h2>
       <div class="hist"><table>
         <thead><tr><th>Time</th><th>Side</th><th>Entry</th><th>SL</th><th>TP</th><th>Result</th></tr></thead>
@@ -206,8 +343,16 @@ dialog{overflow-x:hidden}
   </aside>
 </main>
 
+<nav class="bnav" id="bnav" aria-label="Sections">
+  <button data-v="chart" class="on" type="button"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v3M7 17v3M12 3v4M12 15v6M17 6v3M17 15v3"/><rect x="5" y="7" width="4" height="10" rx="1"/><rect x="10" y="7" width="4" height="8" rx="1"/><rect x="15" y="9" width="4" height="6" rx="1"/></svg><span>Chart</span></button>
+  <button data-v="setup" type="button"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg><span>Setup</span><i class="dot" id="setupDot" hidden></i></button>
+  <button data-v="scanner" type="button"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/></svg><span>Scanner</span></button>
+  <button data-v="backtest" type="button"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 2.6-6.4L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg><span>Backtest</span></button>
+  <button data-v="account" type="button"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><span>Account</span></button>
+</nav>
+
 <dialog id="settings">
-  <h3 style="margin-top:0">Settings</h3>
+  <div class="dhead"><h3>Settings</h3><button type="button" class="xbtn" autofocus aria-label="Close" onclick="this.closest('dialog').close()">✕</button></div>
   <div class="form">
     <label class="full">Twelve Data API key (free at twelvedata.com — needed for forex/gold; stays in this browser)
       <input id="s_tdkey" type="password" autocomplete="off"></label>
@@ -272,7 +417,7 @@ dialog{overflow-x:hidden}
     <label class="full">Watchlist — Crypto (one per line)<textarea id="s_wl_binance" rows="3"></textarea></label>
     <label class="full">Watchlist — Forex / Twelve Data (e.g. EUR/USD, XAU/USD)<textarea id="s_wl_twelvedata" rows="3"></textarea></label>
   </div>
-  <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+  <div class="actions" style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
     <button id="notifyBtn">Enable notifications</button>
     <button id="closeSettings">Cancel</button>
     <button class="primary" id="saveSettings">Save</button>
@@ -280,7 +425,7 @@ dialog{overflow-x:hidden}
 </dialog>
 
 <dialog id="broker">
-  <h3 style="margin-top:0">Connect MT5 (via MetaApi)</h3>
+  <div class="dhead"><h3>Connect MT5 (via MetaApi)</h3><button type="button" class="xbtn" autofocus aria-label="Close" onclick="this.closest('dialog').close()">✕</button></div>
   <p class="muted" style="margin-top:0;font-size:13px">MetaApi runs MetaTrader 5 in the cloud for you, so this page can read your account and place trades.
     Your MT5 password is sent straight to MetaApi when you add the account and is not stored in this app.
     Use a <b>demo account</b> first. Auto-trading only runs while this page is open.</p>
@@ -304,7 +449,7 @@ dialog{overflow-x:hidden}
     <label class="full">Symbol names if your broker differs, one per line, e.g. XAU/USD=GOLD<textarea id="b_map" rows="2" placeholder="XAU/USD=GOLD"></textarea></label>
   </div>
   <p class="muted" id="b_msg" style="font-size:13px;min-height:1.2em"></p>
-  <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
+  <div class="actions" style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
     <button id="b_disconnect" type="button">Disconnect</button>
     <button id="b_close" type="button">Close</button>
     <button id="b_save" type="button">Save settings</button>
@@ -1005,6 +1150,7 @@ const chart = LightweightCharts.createChart($('chart'), {
   crosshair:{mode:0},
 });
 const candles = chart.addCandlestickSeries({upColor:'#22c55e', downColor:'#ef4444', wickUpColor:'#22c55e', wickDownColor:'#ef4444', borderVisible:false});
+candles.priceScale().applyOptions({scaleMargins:{top:0.16, bottom:0.08}});   // headroom for the legend and the plan tags
 const emaLine = chart.addLineSeries({color:'#64748b', lineWidth:2, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false, autoscaleInfoProvider:() => null});
 let extraSeries = [], priceLines = [], OV = null, planRange = null;
 candles.applyOptions({autoscaleInfoProvider: orig => {   // keep the whole TP / SL box in view
@@ -1035,10 +1181,12 @@ function drawOverlay(){
     html += `<div class="ovt ${t.cls}" style="left:${x}px;top:${y}px"${t.title ? ` title="${t.title}"` : ''}>${t.text}</div>`;
   }
   ovEl.innerHTML = html;
-  // keep every tag inside the chart area
-  const box = ovEl.getBoundingClientRect();
+  // keep every tag inside the chart area and below the legend chips
+  const box = ovEl.getBoundingClientRect(), legendBottom = legendEl.getBoundingClientRect().bottom + 4;
   for (const el of ovEl.querySelectorAll('.ovt')){
-    const r = el.getBoundingClientRect();
+    let r = el.getBoundingClientRect();
+    if (r.top < legendBottom && r.right > box.left && r.left < legendEl.getBoundingClientRect().right + 8){
+      el.style.top = (parseFloat(el.style.top) + (legendBottom - r.top)) + 'px'; r = el.getBoundingClientRect(); }
     if (r.right > box.right - 4) el.style.left = (parseFloat(el.style.left) - (r.right - box.right + 6)) + 'px';
     else if (r.left < box.left + 2) el.style.left = (parseFloat(el.style.left) + (box.left + 4 - r.left)) + 'px';
   }
@@ -1190,7 +1338,42 @@ function setTab(which){
   $('tabTv').classList.toggle('on', tv); $('tabBt').classList.toggle('on', bt); $('tabSig').classList.toggle('on', !tv && !bt);
   $('tv').style.display = tv ? 'block' : 'none'; $('bt').style.display = bt ? 'block' : 'none'; $('tvNote').style.display = tv ? 'block' : 'none';
   $('chart').style.display = tv || bt ? 'none' : 'block';
+  $('fcMini').style.display = tv || bt ? 'none' : '';
   if (tv) showTv();
+  sizeChart();
+}
+
+// ======================= Mobile layout =======================
+const isPhone = () => matchMedia('(max-width:900px)').matches;
+// The chart fills the space between the top bar and the plan strip / bottom bar
+function sizeChart(){
+  const el = $('chart');
+  if (!isPhone() || el.style.display === 'none'){ el.style.height = ''; return; }
+  const top = el.getBoundingClientRect().top + window.scrollY - window.scrollY;
+  const nav = $('bnav').offsetHeight, mini = $('fcMini').offsetHeight;
+  const vh = (window.visualViewport && visualViewport.height) || innerHeight;
+  el.style.height = Math.max(280, Math.floor(vh - top - nav - mini)) + 'px';
+  $('tv').style.height = el.style.height;
+}
+function setMView(v){
+  document.body.dataset.mview = v;
+  for (const b of $('bnav').querySelectorAll('button')) b.classList.toggle('on', b.dataset.v === v);
+  if (v === 'backtest') setTab('bt');
+  else if (v === 'chart' && $('tabBt').classList.contains('on')) setTab('sig');
+  try { localStorage.setItem('smc-mview', v); } catch(e){}
+  window.scrollTo(0, 0);
+  requestAnimationFrame(sizeChart);
+}
+// Compact trade plan under the chart; tapping it opens the Setup section
+function renderMini(r){
+  const p = r.plan, el = $('fcMini');
+  $('setupDot').hidden = !(p && p.htfOk);
+  if (!p){ el.innerHTML = '<span class="muted">No setup forming on this chart</span><span class="go">›</span>'; return; }
+  const up = p.dir === 1, rr = Math.abs((p.tps ? p.tps[2] : p.tp) - p.entry) / Math.abs(p.entry - p.sl);
+  const state = p.type === 'active' ? (p.hits ? `TP${p.hits} ✓` : 'RUNNING') : p.type === 'limit' ? 'LIMIT' : 'IF BREAK';
+  el.innerHTML = `<span class="pill ${!p.htfOk ? 'neu' : up ? 'up' : 'down'}">${up ? '▲ BUY' : '▼ SELL'} · ${state}</span>
+    <b>${fmt(p.entry)}</b><span class="sep">·</span><span style="color:var(--down)">SL ${fmt(p.sl)}</span>
+    <span class="sep">·</span><span class="muted">R:R ${rr.toFixed(1)}</span><span class="go">›</span>`;
 }
 
 // ======================= Backtest =======================
@@ -1451,7 +1634,7 @@ async function scanCurrent(){
   if (!sym){ toast('Type a symbol first, e.g. BTCUSDT or EUR/USD.'); return; }
   if (scanning) return;
   scanning = true; chartScanSym = sym;
-  const btn = $('scanBtn'); btn.disabled = true; btn.textContent = 'Scanning…';
+  const btn = $('scanBtn'); btn.disabled = true; btn.classList.add('busy'); btn.querySelector('span').textContent = 'Scanning…';
   $('curSym').textContent = $('fcSym').textContent = `${sym} · ${S.tf}`;
   setStatus(`Scanning ${sym}…`);
   try {
@@ -1459,6 +1642,7 @@ async function scanCurrent(){
     if (cs.length < 50) throw new Error('Not enough candles returned.');
     draw(cs, r);
     $('fc').innerHTML = forecastHtml(r);
+    renderMini(r);
     $('cur').innerHTML = `
       <div>Price</div><div class="big">${fmt(r.price)}</div>
       <div>Trend (${S.tf})</div><div>${dirPill(r.trendDir)}</div>
@@ -1487,7 +1671,7 @@ async function scanCurrent(){
     legendEl.innerHTML = `<span class="chip" style="color:var(--down);max-width:min(560px,80vw);white-space:normal">${esc(msg)}</span>`;
     toast(msg);
   } finally {
-    scanning = false; chartScanSym = null; btn.disabled = false; btn.textContent = 'Scan chart';
+    scanning = false; chartScanSym = null; btn.disabled = false; btn.classList.remove('busy'); btn.querySelector('span').textContent = 'Scan chart';
   }
 }
 
@@ -1498,7 +1682,7 @@ function renderWatchlist(){
     const x = wlResults[[S.source, sym, S.tf, S.htf].join('|')];
     const row = !x ? '<td colspan="4" class="muted">–</td>' : x.err ? `<td colspan="4" style="color:var(--down)" title="${esc(x.err)}">error</td>`
       : `<td>${dirPill(x.r.trendDir)}</td><td>${S.p.useHtf ? dirPill(x.r.htf) : '–'}</td><td>${statusHtml(x.r)}</td>
-         <td title="${x.r.stats.trades} finished setups">${x.r.stats.trades >= 3 ? pct(x.r.stats.winRate) : '–'}</td>`;
+         <td title="${x.r.stats.trades} finished setups">${x.r.stats.trades >= 3 ? pct(x.r.stats.winRate) : ''}</td>`;
     return `<tr data-sym="${esc(sym)}"><td><b>${esc(sym)}</b></td>${row}</tr>`;
   }).join('') || '<tr><td colspan="5" class="muted">Add symbols in Settings</td></tr>';
 }
@@ -1562,7 +1746,20 @@ $('htf').onchange = e => { S.htf = e.target.value; save(); renderWatchlist(); sc
 $('auto').onchange = e => { S.auto = e.target.value; save(); setAuto(); };
 $('scanBtn').onclick = scanCurrent;
 $('scanAllBtn').onclick = scanAll;
-$('wl').onclick = e => { const tr = e.target.closest('tr[data-sym]'); if (!tr) return; S.symbol[S.source] = tr.dataset.sym; save(); $('symbol').value = tr.dataset.sym; scanCurrent(); if ($('tabTv').classList.contains('on')) showTv(); };
+$('wl').onclick = e => { const tr = e.target.closest('tr[data-sym]'); if (!tr) return; S.symbol[S.source] = tr.dataset.sym; save(); $('symbol').value = tr.dataset.sym;
+  if (isPhone()) setMView('chart');
+  scanCurrent(); if ($('tabTv').classList.contains('on')) showTv(); };
+$('bnav').onclick = e => { const b = e.target.closest('button[data-v]'); if (b) setMView(b.dataset.v); };
+$('fcMini').onclick = () => { if (isPhone()) setMView('setup'); };
+$('mBroker').onclick = () => $('brokerBtn').click();
+$('mSettings').onclick = () => $('settingsBtn').click();
+$('symbol').addEventListener('keydown', e => { if (e.key === 'Enter'){ e.target.blur(); } });
+addEventListener('resize', () => requestAnimationFrame(sizeChart));
+addEventListener('orientationchange', () => setTimeout(sizeChart, 300));
+if (window.visualViewport) visualViewport.addEventListener('resize', () => requestAnimationFrame(sizeChart));
+(() => { let v = 'chart'; try { v = localStorage.getItem('smc-mview') || 'chart'; } catch(e){}
+  if (!['chart','setup','scanner','backtest','account'].includes(v)) v = 'chart';
+  if (isPhone()) setMView(v); else document.body.dataset.mview = 'chart'; })();
 const viewLabel = () => { $('viewBtn').textContent = S.p.view === 'detailed' ? 'View: Detailed' : 'View: Clean'; };
 $('viewBtn').onclick = () => { S.p.view = S.p.view === 'detailed' ? 'clean' : 'detailed'; save(); viewLabel(); if (LAST_DRAW) draw(LAST_DRAW.cs, LAST_DRAW.r); };
 viewLabel();
@@ -1671,6 +1868,7 @@ const roundTick = (v, tick) => tick > 0 ? Math.round(v/tick)*tick : v;
 
 function renderBroker(){
   const i = BROKER.info;
+  $('bPosWrap').hidden = !BROKER.conn;
   $('bAuto').innerHTML = BROKER.conn ? (S.broker.auto ? '<span class="pill up">Auto-trade ON</span>' : '<span class="pill neu">Auto-trade off</span>') : '';
   $('bInfo').innerHTML = !i ? `<div>Status</div><div class="${BROKER.conn ? '' : 'muted'}">${esc(BROKER.status)}</div>` : `
     <div>Account</div><div>${esc(i.name || '')} · ${esc(String(i.login || ''))}<br><span class="muted">${esc(i.broker || '')} · ${esc(i.server || '')}</span></div>
