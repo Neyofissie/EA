@@ -51,3 +51,11 @@ Settings → **SMC confluences**. All are off by default, so results match the o
 - **CHoCH reversals:** optional. A break against the current structure becomes a setup too, labelled *SMC CHoCH*.
 - **Filters:** choose a *minimum confluence score* (0–6) and/or tick confluences as *required*.
 - **Backtest:** shows win rate and average R **with vs without** each confluence, and by score, so you can see which ones help on your pairs.
+
+## Forecast on the chart
+The forecast is drawn as a position box to the right of price, the way a broker's long/short tool looks:
+- **Box:** green box from entry to **TP**, red box from entry to **SL**, with price tags and a **▲ LONG / ▼ SHORT** pill (plus *LIMIT* or *IF BREAK* while it isn't triggered yet).
+- **Badges:** **R:R** shows the reward-to-risk. The **%** badge is the share of past setups on this chart that hit TP (shown once there are at least 3).
+- **Zones:** shaded rectangles labelled *Demand / Supply Order Block*, *FVG*, *Support ×n*, *Resistance ×n*.
+- **Chart labels** (Settings → Chart labels): HH / HL / LH / LL swing points, **BSL / SSL** liquidity sweeps (a wick through a swing that closes back inside), and **LO / NY / LC KZ** kill zone starts (London open 07, New York 12, London close 15 UTC).
+- **Faded box:** the forecast goes against the HTF bias, so the scanner won't signal it.

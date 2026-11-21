@@ -68,9 +68,42 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 .form .full{grid-column:1/-1}
 .toast{position:fixed;right:16px;bottom:16px;display:flex;flex-direction:column;gap:8px;z-index:9}
 .toast div{background:var(--panel2);border:1px solid var(--line);border-left:4px solid var(--accent);padding:10px 14px;border-radius:8px;max-width:320px}
+#chart{position:relative}
+#ov{position:absolute;left:0;top:0;pointer-events:none;overflow:hidden;z-index:3}
+.ovr{position:absolute;box-sizing:border-box}
+.ovr.lab-left span{left:6px;right:auto}
+.ovr span{position:absolute;right:6px;top:50%;transform:translateY(-50%);font-size:12px;font-weight:700;color:#e2e8f0;
+  background:rgba(13,16,23,.82);padding:2px 8px;border-radius:5px;white-space:nowrap}
+.ovr.tpbox{background:rgba(34,197,94,.20);border:1px solid rgba(34,197,94,.65)}
+.ovr.slbox{background:rgba(239,68,68,.20);border:1px solid rgba(239,68,68,.65)}
+.ovr.ob-d{background:rgba(168,85,247,.16);border-top:1px dashed rgba(192,132,252,.8);border-bottom:1px dashed rgba(192,132,252,.8)}
+.ovr.ob-s{background:rgba(236,72,153,.14);border-top:1px dashed rgba(244,114,182,.8);border-bottom:1px dashed rgba(244,114,182,.8)}
+.ovr.fvg{background:rgba(56,189,248,.14);border-top:1px dotted rgba(56,189,248,.8);border-bottom:1px dotted rgba(56,189,248,.8)}
+.ovr.sup{background:rgba(34,197,94,.10);border-top:1px solid rgba(34,197,94,.45);border-bottom:1px solid rgba(34,197,94,.45)}
+.ovr.res{background:rgba(239,68,68,.10);border-top:1px solid rgba(239,68,68,.45);border-bottom:1px solid rgba(239,68,68,.45)}
+.ovr.entryln{border-top:1px dashed rgba(96,165,250,.9);height:0!important}
+.ovt{position:absolute;font-size:12px;font-weight:800;letter-spacing:.02em;padding:2px 7px;border-radius:5px;white-space:nowrap;
+  background:rgba(13,16,23,.88);font-variant-numeric:tabular-nums}
+.ovt.tp{color:#4ade80;transform:translate(-4px,-115%)}
+.ovt.sl{color:#f87171;transform:translate(-4px,15%)}
+.ovt.sl.up{transform:translate(-4px,-115%)}
+.ovt.entry{color:#60a5fa;transform:translate(-4px,-50%)}
+.ovt.rr{color:#93c5fd;border:1px solid #3b82f6;transform:translate(calc(-100% - 4px),-130%)}
+.ovt.side{color:#4ade80;background:rgba(34,197,94,.16);transform:translate(-4px,135%)}
+.ovt.side.short{color:#f87171;background:rgba(239,68,68,.16);transform:translate(-4px,-235%)}
+.ovt.conf{color:#fbbf24;border:1.5px solid #f59e0b;background:rgba(245,158,11,.14);transform:translate(-50%,-250%)}
+.ovt.conf.short{transform:translate(-50%,150%)}
+.faded{opacity:.45}
+.legend{position:absolute;left:10px;top:10px;z-index:4;display:flex;gap:8px;align-items:center;flex-wrap:wrap;pointer-events:none}
+.legend .chip{background:rgba(13,16,23,.85);border:1px solid var(--line);border-radius:8px;padding:5px 10px;font-weight:700}
+.legend .px{font-size:16px;font-variant-numeric:tabular-nums}
 @media (max-width:900px){
   main{grid-template-columns:1fr;height:auto}
   header h1{width:100%}
+  #chart{min-height:62vh}
+  .ovt{font-size:11px;padding:2px 5px}
+  .ovr span{font-size:11px}
+  .legend .px{font-size:14px}
 }
 </style>
 </head>
@@ -161,6 +194,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
       <input id="s_tdkey" type="password" autocomplete="off"></label>
     <label>Strategy<select id="s_strategy"><option value="smc">SMC: BOS + retest</option><option value="sr">Support &amp; Resistance</option><option value="both">Both strategies</option></select></label>
     <label>Swing length (bars each side)<input id="s_swing" type="number" min="1"></label>
+    <label>Chart labels<select id="s_annot"><option value="all">Swings, liquidity, kill zones</option><option value="forecast">Forecast only</option></select></label>
     <div class="full" style="border-top:1px solid var(--line);padding-top:10px;color:var(--text);font-weight:600">SMC confluences</div>
     <label>Entry zone (POI)<select id="s_poi"><option value="level">Broken level (BOS retest)</option><option value="ob">Order block</option><option value="fvg">Fair value gap</option><option value="any">Any: level, OB or FVG</option></select></label>
     <label>Also trade CHoCH reversals<select id="s_choch"><option value="0">No</option><option value="1">Yes</option></select></label>
@@ -225,7 +259,7 @@ const CONF_LABEL = {OB:'Order block', FVG:'Fair value gap', Sweep:'Liquidity swe
 const DEFAULTS = {
   source:'binance', symbol:{binance:'BTCUSDT', twelvedata:'EUR/USD', demo:'DEMO-1'},
   tf:'15m', htf:'4h', auto:'0', tdkey:'',
-  p:{poi:'level', choch:false, dispAtr:1.0, session:'both', minConf:0, req:[], strategy:'smc', srTouches:2, zoneW:0.5, srLook:300, tpMode:'zone', minRR:1.5, srTrend:'trend', swing:5, trend:'EMA + Structure', ema:200, htfEma:50, useHtf:true, tol:0.25, maxRetest:20, rej:true, slAtr:0.5, rr:2, fresh:5, closed:true},
+  p:{annot:'all', poi:'level', choch:false, dispAtr:1.0, session:'both', minConf:0, req:[], strategy:'smc', srTouches:2, zoneW:0.5, srLook:300, tpMode:'zone', minRR:1.5, srTrend:'trend', swing:5, trend:'EMA + Structure', ema:200, htfEma:50, useHtf:true, tol:0.25, maxRetest:20, rej:true, slAtr:0.5, rr:2, fresh:5, closed:true},
   wl:{
     binance:['BTCUSDT','ETHUSDT','SOLUSDT','BNBUSDT','XRPUSDT','ADAUSDT','DOGEUSDT','AVAXUSDT'],
     twelvedata:['EUR/USD','GBP/USD','USD/JPY','AUD/USD','USD/CAD','GBP/JPY','EUR/JPY','XAU/USD'],
@@ -336,6 +370,7 @@ function analyze(cs, p, htfBias){
   let lastL=null, prevL=null, lastLIdx=null, lBroken=true;
   let trendDir=0, pend=null;
   const bos=[], signals=[], trendArr=new Array(n).fill(0), lowsP=[], highsP=[];
+  const pivots=[], sweeps=[]; let liqH=[], liqL=[];  // swing labels; resting liquidity above highs / below lows
   // candle length, for the session check (sessions only matter below 4h)
   let barMs = Infinity;
   for (let k = 1; k < Math.min(n, 60); k++) barMs = Math.min(barMs, cs[k].t - cs[k-1].t);
@@ -391,9 +426,18 @@ function analyze(cs, p, htfBias){
       for (let k = j-L; k <= j+L; k++){ if (k===j) continue;
         if (cs[k].h >= cs[j].h) isH = false;
         if (cs[k].l <= cs[j].l) isL = false; }
-      if (isH){ prevH=lastH; lastH=cs[j].h; lastHIdx=j; hBroken=false; highsP.push({p:cs[j].h, j}); }
-      if (isL){ prevL=lastL; lastL=cs[j].l; lastLIdx=j; lBroken=false; lowsP.push({p:cs[j].l, j}); }
+      if (isH){ prevH=lastH; lastH=cs[j].h; lastHIdx=j; hBroken=false; highsP.push({p:cs[j].h, j});
+        pivots.push({j, hi:true, label: prevH===null ? 'H' : lastH > prevH ? 'HH' : 'LH'}); liqH.push({p:cs[j].h, j}); }
+      if (isL){ prevL=lastL; lastL=cs[j].l; lastLIdx=j; lBroken=false; lowsP.push({p:cs[j].l, j});
+        pivots.push({j, hi:false, label: prevL===null ? 'L' : lastL < prevL ? 'LL' : 'HL'}); liqL.push({p:cs[j].l, j}); }
     }
+    // liquidity sweep: wick through a resting swing, close back inside (BSL above highs, SSL below lows)
+    liqH = liqH.filter(u => { if (u.j >= i) return true;
+      if (c.h > u.p && c.c < u.p){ sweeps.push({i, side:'BSL', p:u.p}); return false; }
+      return c.c <= u.p; }).slice(-8);
+    liqL = liqL.filter(u => { if (u.j >= i) return true;
+      if (c.l < u.p && c.c > u.p){ sweeps.push({i, side:'SSL', p:u.p}); return false; }
+      return c.c >= u.p; }).slice(-8);
     const haveS = prevH!==null && prevL!==null;
     const sUp = haveS && lastH>prevH && lastL>prevL, sDn = haveS && lastH<prevH && lastL<prevL;
     const eUp = i>=3 && c.c>ema[i] && ema[i]>ema[i-3], eDn = i>=3 && c.c<ema[i] && ema[i]<ema[i-3];
@@ -501,7 +545,7 @@ function analyze(cs, p, htfBias){
     plan = mk(-1, 'watch', lastL, {trigger:lastL});
 
   return {
-    ema, bos: useSmc ? bos : [], zones: sr.zones, signals:good, trendDir, state: useSmc && pend ? pend.dir : 0,
+    ema, bos: useSmc ? bos : [], zones: sr.zones, pivots, sweeps, signals:good, trendDir, state: useSmc && pend ? pend.dir : 0,
     level: useSmc && pend ? pend.lvl : null, htf: htfNow,
     last, lastAgo: last ? n-1-last.i : null, price: close, plan, stats,
   };
@@ -687,75 +731,132 @@ const chart = LightweightCharts.createChart($('chart'), {
 });
 const candles = chart.addCandlestickSeries({upColor:'#22c55e', downColor:'#ef4444', wickUpColor:'#22c55e', wickDownColor:'#ef4444', borderVisible:false});
 const emaLine = chart.addLineSeries({color:'#64748b', lineWidth:2, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false, autoscaleInfoProvider:() => null});
-let extraSeries = [], priceLines = [];
+let extraSeries = [], priceLines = [], OV = null, planRange = null;
+candles.applyOptions({autoscaleInfoProvider: orig => {   // keep the whole TP / SL box in view
+  const r = orig(); if (!r || !planRange) return r;
+  r.priceRange.minValue = Math.min(r.priceRange.minValue, planRange.min);
+  r.priceRange.maxValue = Math.max(r.priceRange.maxValue, planRange.max);
+  return r;
+}});
+const ovEl = document.createElement('div'); ovEl.id = 'ov'; $('chart').appendChild(ovEl);
+const legendEl = document.createElement('div'); legendEl.className = 'legend'; $('chart').appendChild(legendEl);
+// HTML overlay (rectangles + tags) positioned from bar index and price, redrawn whenever the view moves
+function drawOverlay(){
+  if (!OV){ ovEl.innerHTML = ''; return; }
+  const ts = chart.timeScale(), W = ts.width(), H = $('chart').clientHeight - ts.height();
+  ovEl.style.width = W + 'px'; ovEl.style.height = H + 'px';
+  const X = l => ts.logicalToCoordinate(l), Y = v => candles.priceToCoordinate(v);
+  let html = '';
+  for (const r of OV.rects){
+    const x0 = X(r.l0), x1 = X(r.l1), y0 = Y(r.p0), y1 = Y(r.p1);
+    if ([x0, x1, y0, y1].some(v => v === null)) continue;
+    const left = Math.max(-2, Math.min(x0, x1)), right = Math.min(W + 2, Math.max(x0, x1));
+    if (right <= left) continue;
+    html += `<div class="ovr ${r.cls}" style="left:${left}px;top:${Math.min(y0, y1)}px;width:${right - left}px;height:${Math.max(2, Math.abs(y1 - y0))}px">${r.label ? `<span>${r.label}</span>` : ''}</div>`;
+  }
+  for (const t of OV.tags){
+    const x = X(t.l), y = Y(t.p);
+    if (x === null || y === null) continue;
+    html += `<div class="ovt ${t.cls}" style="left:${x}px;top:${y}px"${t.title ? ` title="${t.title}"` : ''}>${t.text}</div>`;
+  }
+  ovEl.innerHTML = html;
+  // keep every tag inside the chart area
+  const box = ovEl.getBoundingClientRect();
+  for (const el of ovEl.querySelectorAll('.ovt')){
+    const r = el.getBoundingClientRect();
+    if (r.right > box.right - 4) el.style.left = (parseFloat(el.style.left) - (r.right - box.right + 6)) + 'px';
+    else if (r.left < box.left + 2) el.style.left = (parseFloat(el.style.left) + (box.left + 4 - r.left)) + 'px';
+  }
+}
+let ovQueued = false;
+const queueOverlay = () => { if (ovQueued) return; ovQueued = true; requestAnimationFrame(() => requestAnimationFrame(() => { ovQueued = false; drawOverlay(); })); };
+chart.timeScale().subscribeVisibleLogicalRangeChange(queueOverlay);
+chart.subscribeCrosshairMove(queueOverlay);
+try { new ResizeObserver(queueOverlay).observe($('chart')); } catch(e){}
 
 function draw(cs, r){
-  const d = decimals(cs[cs.length-1]?.c || 1), ms = tfOf(S.tf).ms, lastT = cs[cs.length-1].t;
+  const n = cs.length, d = decimals(cs[n-1]?.c || 1), ms = tfOf(S.tf).ms, lastT = cs[n-1].t, px = cs[n-1].c;
+  const annot = S.p.annot !== 'forecast';
   candles.applyOptions({priceFormat:{type:'price', precision:d, minMove:Math.pow(10,-d)}});
-  // 30 empty future candles give room to draw the forecast to the right of price
+  // empty future candles give room to draw the forecast to the right of price
   const future = Array.from({length:30}, (_, k) => ({time:(lastT + (k+1)*ms)/1000}));
-  candles.setData(cs.map(c => ({time:c.t/1000, open:c.o, high:c.h, low:c.l, close:c.c})).concat(future));
   emaLine.applyOptions({color: r.trendDir===1 ? '#14b8a6' : r.trendDir===-1 ? '#be123c' : '#64748b'});
-  emaLine.setData(cs.map((c,i) => ({time:c.t/1000, value:r.ema[i]})).slice(Math.min(S.p.ema, cs.length-1)));
+  emaLine.setData(cs.map((c,i) => ({time:c.t/1000, value:r.ema[i]})).slice(Math.min(S.p.ema, n-1)));
   extraSeries.forEach(s => chart.removeSeries(s)); extraSeries = [];
   priceLines.forEach(l => candles.removePriceLine(l)); priceLines = [];
+  const rects = [], tags = [], END = n;  // zones stop where the forecast box starts
 
-  for (const b of r.bos.slice(-40)){
-    const s = chart.addLineSeries({color: b.dir===1 ? '#14b8a6' : '#e11d48', lineWidth:1, lineStyle:2, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false});
-    s.setData([{time:cs[b.from].t/1000, value:b.level}, {time:cs[b.to].t/1000, value:b.level}]);
-    extraSeries.push(s);
-  }
+  // legend: symbol · timeframe · price · 24h change
+  let ref = cs[0]; for (let k = n-1; k >= 0; k--) if (cs[k].t <= lastT - 86400e3){ ref = cs[k]; break; }
+  const chg = (px - ref.c)/ref.c*100;
+  legendEl.innerHTML = `<span class="chip">${esc(curSymbol())}</span><span class="chip">${S.tf.toUpperCase()}</span>
+    <span class="chip px">${fmt(px)} <span style="color:${chg >= 0 ? 'var(--up)' : 'var(--down)'};font-size:13px">${chg >= 0 ? '▲' : '▼'} ${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%</span></span>`;
+
   const markers = [];
-  for (const b of r.bos.slice(-40)) markers.push({time:cs[b.to].t/1000, position:b.dir===1?'aboveBar':'belowBar', color:b.choch?'#f59e0b':'#94a3b8', shape:'circle', size:0.4, text:b.choch?'CHoCH':'BOS'});
-  for (const s of r.signals) markers.push({time:s.t/1000, position:s.dir===1?'belowBar':'aboveBar', color:s.dir===1?'#22c55e':'#ef4444', shape:s.dir===1?'arrowUp':'arrowDown', text:(s.kind==='SMC' ? '' : 'S/R ') + (s.dir===1?'BUY':'SELL')});
-  // S/R zones: nearest 4 above and 4 below price, drawn as bands from first touch to the right edge
-  const px = cs[cs.length-1].c;
-  const near = r.zones.slice().sort((a,b) => Math.abs((a.zb+a.zt)/2 - px) - Math.abs((b.zb+b.zt)/2 - px));
-  const pick = near.filter(z => z.zt < px).slice(0,4).concat(near.filter(z => z.zb >= px).slice(0,4));
-  for (const z of pick){
-    const col = z.zt < px ? '#22c55e' : '#ef4444', t0 = cs[Math.max(0, z.first)].t/1000, t1 = (lastT + 30*ms)/1000;
-    for (const v of [z.zb, z.zt]){
-      const sz = chart.addLineSeries({color: col + '88', lineWidth:1, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false});
-      sz.setData([{time:t0, value:v}, {time:t1, value:v}]); extraSeries.push(sz);
-    }
-    priceLines.push(candles.createPriceLine({price:(z.zb+z.zt)/2, color:col + '33', lineWidth:4, lineStyle:0, axisLabelVisible:true, title:`${z.zt < px ? 'S' : 'R'} ×${z.touches}`}));
+  // BOS / CHoCH levels
+  for (const b of r.bos.slice(-12)){
+    const sr = chart.addLineSeries({color: b.dir===1 ? '#14b8a6' : '#e11d48', lineWidth:1, lineStyle:2, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false});
+    sr.setData([{time:cs[b.from].t/1000, value:b.level}, {time:cs[b.to].t/1000, value:b.level}]); extraSeries.push(sr);
+    markers.push({time:cs[b.to].t/1000, position:b.dir===1?'aboveBar':'belowBar', color:b.choch?'#f59e0b':'#94a3b8', shape:'circle', size:0.4, text:b.choch?'CHoCH':'BOS'});
   }
+  if (annot){
+    // swing structure labels
+    for (const v of r.pivots.slice(-10)) markers.push({time:cs[v.j].t/1000, position:v.hi?'aboveBar':'belowBar',
+      color: v.label==='HH' || v.label==='HL' ? '#4ade80' : v.label==='LH' || v.label==='LL' ? '#f87171' : '#94a3b8', shape:'circle', size:0.5, text:v.label});
+    // liquidity sweeps
+    for (const w of r.sweeps.slice(-5)) markers.push({time:cs[w.i].t/1000, position:w.side==='BSL'?'aboveBar':'belowBar',
+      color:'#fb923c', shape:w.side==='BSL'?'arrowUp':'arrowDown', text:w.side});
+    // kill zones (intraday only): London open, New York open, London close
+    if (ms < 4*3600e3){
+      const kz = []; let prevH = null;
+      for (let k = Math.max(0, n-300); k < n; k++){
+        const h = new Date(cs[k].t).getUTCHours();
+        if (h !== prevH){ const lab = h===7 ? 'LO KZ' : h===12 ? 'NY KZ' : h===15 ? 'LC KZ' : null; if (lab) kz.push({k, lab}); }
+        prevH = h;
+      }
+      for (const z of kz.slice(-4)) markers.push({time:cs[z.k].t/1000, position:'belowBar', color:'#c084fc', shape:'square', size:0.6, text:z.lab});
+    }
+  }
+  for (const s of r.signals) markers.push({time:s.t/1000, position:s.dir===1?'belowBar':'aboveBar', color:s.dir===1?'#22c55e':'#ef4444',
+    shape:s.dir===1?'arrowUp':'arrowDown', text:(s.kind==='SMC' ? '' : s.kind==='SMC CHoCH' ? 'CHoCH ' : 'S/R ') + (s.dir===1?'BUY':'SELL')});
   markers.sort((a,b) => a.time-b.time);
-  candles.setMarkers(markers);
+
+  // S/R zones: nearest 3 above and 3 below price
+  const near = r.zones.slice().sort((a,b) => Math.abs((a.zb+a.zt)/2 - px) - Math.abs((b.zb+b.zt)/2 - px));
+  for (const z of near.filter(z => z.zt < px).slice(0,3).concat(near.filter(z => z.zb >= px).slice(0,3))){
+    const sup = z.zt < px;
+    rects.push({l0:Math.max(0, z.first), l1:END, p0:z.zb, p1:z.zt, cls: sup ? 'sup' : 'res', label:`${sup ? 'Support' : 'Resistance'} ×${z.touches}`});
+  }
 
   const p = r.plan;
+  planRange = null;
   if (p){
-    const T = k => (lastT + k*ms)/1000, last = cs[cs.length-1].c;
-    const start = p.type==='active' ? cs[cs.length-1-p.ago].t/1000 : T(0);
-    const seg = (pts, color, width, style) => {
-      const s = chart.addLineSeries({color, lineWidth:width, lineStyle:style, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false});
-      s.setData(pts); extraSeries.push(s);
-    };
-    const alpha = p.htfOk ? '' : '66';
-    if (p.type !== 'active'){
-      seg([{time:T(1), value:p.entry + p.tol}, {time:T(30), value:p.entry + p.tol}], '#f59e0b55' , 1, 0);
-      seg([{time:T(1), value:p.entry - p.tol}, {time:T(30), value:p.entry - p.tol}], '#f59e0b55' , 1, 0);
-    }
-    seg([{time:start, value:p.entry}, {time:T(30), value:p.entry}], '#e2e8f0' + alpha, 2, 0);
-    seg([{time:start, value:p.sl}, {time:T(30), value:p.sl}], '#ef4444' + alpha, 2, 0);
-    seg([{time:start, value:p.tp}, {time:T(30), value:p.tp}], '#22c55e' + alpha, 2, 0);
-    // projected path: now -> entry -> target
-    const path = p.type==='active' ? [{time:T(0), value:last}, {time:T(30), value:p.tp}]
-      : p.type==='limit' ? [{time:T(0), value:last}, {time:T(6), value:p.entry}, {time:T(30), value:p.tp}]
-      : [{time:T(0), value:last}, {time:T(6), value:p.trigger + (p.dir*p.tol*2)}, {time:T(12), value:p.entry}, {time:T(30), value:p.tp}];
-    seg(path, '#60a5fa' + alpha, 2, 2);
-    chart.timeScale().setVisibleLogicalRange({from: cs.length - 140, to: cs.length + 32});
-    const band = (bot, top, t0, col, title) => {
-      for (const v of [bot, top]) seg([{time:t0, value:v}, {time:T(30), value:v}], col, 1, 0);
-      priceLines.push(candles.createPriceLine({price:(bot+top)/2, color:col.slice(0,7) + '33', lineWidth:4, lineStyle:0, axisLabelVisible:false, title}));
-    };
-    if (p.kind === 'smc' && p.ob) band(p.ob.bot, p.ob.top, p.obT/1000, '#38bdf8cc', 'OB');
-    if (p.kind === 'smc' && p.fvg) band(p.fvg.bot, p.fvg.top, p.fvgT/1000, '#a78bfacc', 'FVG');
-    const tag = p.dir===1 ? 'BUY' : 'SELL';
-    priceLines.push(candles.createPriceLine({price:p.entry, color:'#e2e8f0', lineWidth:1, lineStyle:3, title:`${tag} entry`}));
-    priceLines.push(candles.createPriceLine({price:p.sl, color:'#ef4444', lineWidth:1, lineStyle:3, title:'SL'}));
-    priceLines.push(candles.createPriceLine({price:p.tp, color:'#22c55e', lineWidth:1, lineStyle:3, title:'TP'}));
+    const up = p.dir === 1, fade = p.htfOk ? '' : ' faded';
+    if (p.kind === 'smc' && p.ob) rects.push({l0:p.ob.idx, l1:END, p0:p.ob.bot, p1:p.ob.top, cls:(up ? 'ob-d' : 'ob-s') + fade, label: up ? 'Demand Order Block' : 'Supply Order Block'});
+    if (p.kind === 'smc' && p.fvg) rects.push({l0:p.fvg.idx, l1:END, p0:p.fvg.bot, p1:p.fvg.top, cls:'fvg lab-left' + fade, label:'FVG'});
+    // position box, like a broker's long/short tool
+    const l0 = p.type === 'active' ? n-1-p.ago : n, l1 = Math.max(l0, n) + 10;
+    rects.push({l0, l1, p0:p.entry, p1:p.tp, cls:'tpbox' + fade});
+    rects.push({l0, l1, p0:p.entry, p1:p.sl, cls:'slbox' + fade});
+    rects.push({l0:Math.max(0, n-60), l1:l0, p0:p.entry, p1:p.entry, cls:'entryln' + fade});
+    const rr = Math.abs(p.tp - p.entry) / Math.abs(p.entry - p.sl);
+    const narrow = innerWidth < 700;
+    const state = p.type === 'active' || narrow ? '' : p.type === 'limit' ? ' · LIMIT' : ' · IF BREAK';
+    tags.push({l:l0, p:p.tp, cls:'tp' + fade, text:`TP ${fmt(p.tp)}`});
+    tags.push({l:l0, p:p.entry, cls:'entry' + fade, text:`ENTRY ${fmt(p.entry)}`});
+    tags.push({l:l0, p:p.sl, cls:'sl' + (up ? '' : ' up') + fade, text:`SL ${fmt(p.sl)}`});
+    tags.push({l:l0, p:p.sl, cls:'side' + (up ? '' : ' short') + fade, text:(up ? '▲ LONG' : '▼ SHORT') + state});
+    tags.push({l:l1, p:p.entry, cls:'rr' + fade, text:`R:R ${rr.toFixed(1)}`});
+    if (r.stats.trades >= 3) tags.push({l:Math.round((l0 + l1)/2), p:p.tp, cls:'conf' + (up ? '' : ' short') + fade, text:pct(r.stats.winRate),
+      title:`${r.stats.wins} of ${r.stats.trades} past setups on this chart hit TP`});
+    planRange = {min: Math.min(p.sl, p.tp, p.entry), max: Math.max(p.sl, p.tp, p.entry)};
+    priceLines.push(candles.createPriceLine({price:p.entry, color:'#60a5fa', lineWidth:1, lineStyle:3, axisLabelVisible:true, title:''}));
   }
+  candles.setData(cs.map(c => ({time:c.t/1000, open:c.o, high:c.h, low:c.l, close:c.c})).concat(future));
+  candles.setMarkers(markers);
+  OV = {rects, tags};
+  chart.timeScale().setVisibleLogicalRange(innerWidth < 700 ? {from: n - 30, to: n + 15} : {from: n - 90, to: n + 14});
+  queueOverlay();
 }
 
 // ======================= TradingView widget =======================
@@ -1026,7 +1127,7 @@ $('tabTv').onclick = () => setTab('tv');
 $('tabBt').onclick = () => setTab('bt');
 $('bt_run').onclick = runBacktest;
 
-const F = [['s_poi','poi',String],['s_choch','choch',v=>v==='1'],['s_disp','dispAtr',Number],['s_session','session',String],['s_minconf','minConf',Number],
+const F = [['s_annot','annot',String],['s_poi','poi',String],['s_choch','choch',v=>v==='1'],['s_disp','dispAtr',Number],['s_session','session',String],['s_minconf','minConf',Number],
   ['s_strategy','strategy',String],['s_srtouch','srTouches',Number],['s_zonew','zoneW',Number],['s_srlook','srLook',Number],
   ['s_srtrend','srTrend',String],['s_tpmode','tpMode',String],['s_minrr','minRR',Number],['s_swing','swing',Number],['s_trend','trend',String],['s_ema','ema',Number],['s_htfema','htfEma',Number],
   ['s_usehtf','useHtf',v=>v==='1'],['s_tol','tol',Number],['s_maxr','maxRetest',Number],['s_rej','rej',v=>v==='1'],
