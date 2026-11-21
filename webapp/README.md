@@ -34,3 +34,20 @@ Pick **Support & Resistance** (or **Both strategies**) in the selector at the to
 - **Stop loss** goes beyond the zone (or the candle's wick) plus the SL buffer. **Take profit** is the next S/R level, or a fixed R:R. With *next level*, a trade is skipped when there is less than *min room* (default 1.5R) to that level.
 - **Trend:** by default trades are only taken with the trend, and with the HTF bias when that is turned on.
 - **On the chart:** the nearest zones are drawn with their touch count (S ×3 / R ×2). The forecast shows the nearest tradeable zone as a limit order. The backtest splits results into SMC / S/R bounce / S/R flip.
+
+## SMC confluences
+Settings → **SMC confluences**. All are off by default, so results match the original BOS + retest strategy until you turn something on.
+
+| Confluence | How it's checked (buy side; sells are mirrored) |
+|---|---|
+| Order block | Last bearish candle at or just before the leg's low (up to 5 candles back). Counts when the entry candle trades into it. |
+| Fair value gap | Most recent unfilled 3-candle gap (candle 1 high < candle 3 low) in the leg that broke structure. Counts when the entry candle trades into it. |
+| Liquidity sweep | The leg's low wicked below the previous swing low, then closed back above it on the same or the next candle. |
+| Displacement | A candle with body ≥ *N × ATR* (default 1.0) in the break direction, among the last 3 candles of the break. |
+| Premium / discount | Entry is below 50% of the range from the leg low to the high made after the break. |
+| Kill zone | Entry candle opens in London 07–10 or New York 12–15 UTC (always passes on 4h and above). |
+
+- **Entry zone (POI):** broken level (default), order block, FVG, or any of them. The trade triggers when price taps the zone and a rejection candle closes back past the zone's middle. The setup is cancelled on a close beyond the deepest zone.
+- **CHoCH reversals:** optional. A break against the current structure becomes a setup too, labelled *SMC CHoCH*.
+- **Filters:** choose a *minimum confluence score* (0–6) and/or tick confluences as *required*.
+- **Backtest:** shows win rate and average R **with vs without** each confluence, and by score, so you can see which ones help on your pairs.
