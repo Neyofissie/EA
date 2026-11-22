@@ -142,7 +142,7 @@ Settings → **SMC mode**. **Fast** is the default.
 Fast mode produces more setups. Compare both on your pairs with the Backtest or the walk-forward optimizer.
 
 ## High-probability alerts and phone notifications
-- **Settings → Alerts:** *Only alert high-probability setups* (on by default). An alert fires only when the chart's past setups reached TP1 at least **70%** of the time, with at least **8** past setups. Both numbers can be changed. The same rule can also apply to MT5 auto-trading.
+- **Settings → Alerts:** *Only alert high-probability setups* (on by default). An alert fires only when at least **50%** of the chart's past setups succeeded, with at least **8** past setups. Both numbers can be changed. The same rule can also apply to MT5 auto-trading.
 - **What gets the rule:** toasts, the sound, system notifications and automatic Telegram posts. Every alert shows the rate, e.g. "75% of 12 past setups hit TP1". This is history on that pair / timeframe / settings, not a guarantee.
 - **Enable alerts on this device** is under *Account* (or *Settings → Enable notifications*).
 - **Installable app:** the app now ships with `sw.js`, `manifest.webmanifest` and two icons.
@@ -156,4 +156,4 @@ Fast mode produces more setups. Compare both on your pairs with the Backtest or 
 - **How it's measured:** for every past setup on the chart, the app checks whether price moved **2× the risk** in the trade's favour **before touching the original stop loss**. A candle that touches both counts as a loss.
 - **When an alert fires:** that rate must be at least *min %* over at least *min past setups*, and the setup's own target (TP2) must be at least 2:1.
 - **Where you see it:** the chart's % badge, the watchlist *Hit %* and the Forecast's *Reached 2R* line all show this rate. The badge turns **yellow** when a setup meets the rule.
-- **Choosing the %:** by pure chance a 2:1 target is reached about one time in three. Charts at 50–60%+ are already strong, and 70% will be rare on real markets.
+- **Choosing the %:** by pure chance a 2:1 target is reached about one time in three. Charts at 50–60%+ are already strong, so the default is 50%.
