@@ -163,3 +163,15 @@ Fast mode produces more setups. Compare both on your pairs with the Backtest or 
 - **Where:** the chart legend, the Forecast (*Timeframes*, plus whether they agree with the trade), the watchlist *Timeframes* column and Telegram messages.
 - **Settings → Alerts → Only alert when every timeframe agrees:** alerts fire only if all timeframes point the same way as the trade.
 - **Twelve Data free plan:** the check costs about 3 extra requests for the chart you are viewing, cached for up to 30 minutes, and arrives a few seconds after the chart. For the whole watchlist it is off by default on Twelve Data and can be switched on in Settings.
+
+## Build your keys into the app (no typing on each device)
+1. In the app: **Settings** → paste your Twelve Data key (and set up Telegram if you want it included).
+2. **Build keys into the app → Create config.js**. This downloads `config.js`.
+3. Put `config.js` in the app folder next to `index.html` and upload the whole folder to Netlify again.
+4. Every phone and computer that opens the site now uses those keys automatically. A key typed in Settings on a device overrides the built-in one on that device.
+
+**Things to know:**
+- Keys built into a website can be read by anyone who opens it, so keep the link private.
+- If a key leaks, create a new one and rebuild `config.js`.
+- The MT5 login and MetaApi token are never put in this file.
+- `config.js` is git-ignored, so it is never committed. `config.example.js` shows the format.

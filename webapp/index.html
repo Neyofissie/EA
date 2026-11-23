@@ -12,6 +12,7 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <title>SMC + S/R Scanner</title>
 <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+<script src="config.js"></script>
 <style>
 :root{
   --bg:#0d1017; --panel:#151a23; --panel2:#1b2130; --line:#262e3f; --text:#d7dde8; --muted:#8a94a7;
@@ -368,10 +369,16 @@ button.mini{padding:3px 8px;font-size:12px;min-height:0}
 <dialog id="settings">
   <div class="dhead"><h3>Settings</h3><button type="button" class="xbtn" autofocus aria-label="Close" onclick="this.closest('dialog').close()">✕</button></div>
   <div class="form">
-    <label class="full">Twelve Data API key (free at twelvedata.com — needed for forex/gold; stays in this browser)
+    <label class="full">Twelve Data API key (free at twelvedata.com — needed for forex/gold)
       <input id="s_tdkey" type="password" autocomplete="off"></label>
+    <div class="full muted" id="cfgState" style="font-size:12px"></div>
     <label>Strategy<select id="s_strategy"><option value="smc">SMC: BOS + retest</option><option value="sr">Support &amp; Resistance</option><option value="both">Both strategies</option></select></label>
     <label>Swing length (bars each side)<input id="s_swing" type="number" min="1"></label>
+    <div class="full" style="border-top:1px solid var(--line);padding-top:10px;color:var(--text);font-weight:600">Build keys into the app</div>
+    <div class="full muted" style="font-size:12px">Saves you typing keys on every phone and computer. Press the button, put the downloaded <b>config.js</b> into the app folder next to index.html, and upload the folder to Netlify again.
+      <b>Anyone who opens your site can read keys built into it.</b> Only do this if you keep the link private. If a key leaks, make a new one (Twelve Data dashboard / @BotFather <b>/revoke</b>). Your MT5 login and MetaApi token are never included.</div>
+    <label>Include<select id="cfg_what"><option value="td">Twelve Data key</option><option value="all">Twelve Data key + Telegram bot</option></select></label>
+    <div style="display:flex;align-items:flex-end"><button type="button" id="cfg_make" style="width:100%">Create config.js</button></div>
     <div class="full" style="border-top:1px solid var(--line);padding-top:10px;color:var(--text);font-weight:600">Quality filters</div>
     <label>HTF filter<select id="s_htfmode"><option value="ema">HTF EMA bias</option><option value="structure">HTF market structure (last HTF BOS)</option><option value="both">Both</option></select></label>
     <label>Entry in HTF discount / premium<select id="s_htfpd"><option value="0">No</option><option value="1">Yes</option></select></label>
@@ -544,6 +551,12 @@ function save(){
   } catch(e){}
 }
 let S = load();
+// Keys built into this copy of the app (optional config.js next to index.html). Keys typed in Settings on a device win.
+const CFG = window.SMC_CONFIG || {};
+const tdKey = () => S.tdkey || CFG.twelveDataKey || '';
+const tgToken = () => S.tg.token || (CFG.telegram && CFG.telegram.botToken) || '';
+const tgChat = () => S.tg.chat || (CFG.telegram && CFG.telegram.chat) || '';
+try { if (!localStorage.getItem('smc-scanner') && CFG.defaultSource) S.source = CFG.defaultSource; } catch(e){}
 // one-time update: the alert threshold default moved from 70% to 50%
 if ((S.v || 0) < 2){ if (S.p.alertMin === 70) S.p.alertMin = 50; S.v = 2; try { localStorage.setItem('smc-scanner', JSON.stringify(S)); } catch(e){} }
 
@@ -597,9 +610,9 @@ async function getCandles(source, symbol, tfKey, limit=1000){
       if (batch.length < want) break;
     }
   } else if (source === 'twelvedata'){
-    if (!S.tdkey) throw new Error('Add your free Twelve Data API key in Settings to scan forex/gold.');
+    if (!tdKey()) throw new Error('Add your free Twelve Data API key in Settings to scan forex/gold.');
     await throttle('twelvedata', 8000, symbol === chartScanSym); // free plan: 8 requests / minute
-    const url = `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(symbol)}&interval=${tf.td}&outputsize=${Math.min(limit,5000)}&timezone=UTC&order=ASC&apikey=${encodeURIComponent(S.tdkey)}`;
+    const url = `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(symbol)}&interval=${tf.td}&outputsize=${Math.min(limit,5000)}&timezone=UTC&order=ASC&apikey=${encodeURIComponent(tdKey())}`;
     const j = await (await fetch(url)).json();
     if (j.status === 'error' || !j.values) throw new Error(`Twelve Data: ${j.message || 'no data'}`);
     data = j.values.map(v => ({t:Date.parse(v.datetime.replace(' ','T') + (v.datetime.length>10?'Z':'T00:00:00Z')), o:+v.open, h:+v.high, l:+v.low, c:+v.close}));
@@ -1837,7 +1850,7 @@ function checkNew(source, sym, tf, r){
     if (nb) toast(`${sym}: not traded, high-impact ${nb.cur} news "${nb.title}" nearby.`);
     else if (S.broker.auto && BROKER.conn && source === S.source) brokerExecute(sym, r.last, false);
     notify(`${r.last.dir===1?'🟢 BUY':'🔴 SELL'} ${sym} ${tf.toUpperCase()} · 1:${setupRR(r.last).toFixed(1)} · ${pct(oddsOf(r).rate)}`, msg);
-    if (S.tg.auto && S.tg.token && S.tg.chat) tgSend(signalLines(sym, tf, fromSignal(r.last)), true);
+    if (S.tg.auto && tgToken() && tgChat()) tgSend(signalLines(sym, tf, fromSignal(r.last)), true);
   } else if (key in seen && t > seen[key] && r.lastAgo <= 1 && S.broker.auto && BROKER.conn && source === S.source && !S.p.alertGateTrades && !newsBlock(sym))
     brokerExecute(sym, r.last, false);
   seen[key] = Math.max(seen[key]||0, t);
@@ -1846,7 +1859,7 @@ function checkNew(source, sym, tf, r){
     const msg = `${sym} ${tf}: ${p.dir===1?'BUY':'SELL'} setup forming. Limit ~${fmt(p.entry)} · SL ${fmt(p.sl)} · ${S.p.tpMulti ? tpList(p.tps) : 'TP ' + fmt(p.tp)} · ${oddsText(r)}`;
     toast(msg); beep();
     notify(`⏳ ${p.dir===1?'BUY':'SELL'} setup ${sym} ${tf.toUpperCase()} · 1:${setupRR(p).toFixed(1)} · ${pct(oddsOf(r).rate)}`, msg);
-    if (S.tg.auto && S.tg.setups && S.tg.token && S.tg.chat) tgSend(signalLines(sym, tf, fromPlan(p)), true);
+    if (S.tg.auto && S.tg.setups && tgToken() && tgChat()) tgSend(signalLines(sym, tf, fromPlan(p)), true);
   }
   seen[sk] = Math.max(seen[sk]||0, bt);
 }
@@ -1959,12 +1972,30 @@ const F = [['s_mtfon','mtfOn',v=>v==='1'],['s_alertmtf','alertMtf',v=>v==='1'],[
 $('settingsBtn').onclick = () => {
   for (const [id,k] of F){ const v = S.p[k]; $(id).value = typeof v === 'boolean' ? (v?'1':'0') : v; }
   $('s_tdkey').value = S.tdkey;
+  $('s_tdkey').placeholder = CFG.twelveDataKey ? 'Built into this app (leave empty to use it)' : '';
+  $('cfgState').innerHTML = CFG.twelveDataKey || (CFG.telegram && CFG.telegram.botToken)
+    ? `<span class="good">✓</span> Built into this app: ${[CFG.twelveDataKey ? 'Twelve Data key' : '', CFG.telegram && CFG.telegram.botToken ? 'Telegram bot' : ''].filter(Boolean).join(' + ')}. A key typed here overrides it on this device only.`
+    : 'Saved on this device only. To have it on every device, use “Build keys into the app” below.';
   for (const k of CONF_KEYS) $('rq_' + k).checked = (S.p.req || []).includes(k);
   $('t_token').value = S.tg.token; $('t_chat').value = S.tg.chat; $('t_auto').value = S.tg.auto ? '1' : '0';
   $('t_setups').value = S.tg.setups ? '1' : '0'; $('t_footer').value = S.tg.footer;
   $('s_wl_binance').value = S.wl.binance.join('\n');
   $('s_wl_twelvedata').value = S.wl.twelvedata.join('\n');
   $('settings').showModal();
+};
+// Writes config.js with the keys from this device, for uploading next to index.html
+$('cfg_make').onclick = () => {
+  const key = $('s_tdkey').value.trim() || tdKey();
+  readTgForm();
+  if (!key){ toast('Paste your Twelve Data key in the field above first.'); return; }
+  const cfg = {twelveDataKey: key, defaultSource: 'twelvedata'};
+  if ($('cfg_what').value === 'all' && tgToken()) cfg.telegram = {botToken: tgToken(), chat: tgChat()};
+  const text = `// Built-in keys for the SMC + S/R Scanner. Upload this file next to index.html.\n// Anyone who opens the site can read these keys. Delete this file to remove them.\nwindow.SMC_CONFIG = ${JSON.stringify(cfg, null, 2)};\n`;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], {type:'text/javascript'}));
+  a.download = 'config.js'; document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+  toast('config.js downloaded. Put it in the app folder next to index.html and upload the folder to Netlify.');
 };
 $('closeSettings').onclick = () => $('settings').close();
 $('saveSettings').onclick = () => {
@@ -2028,7 +2059,7 @@ const canShare = () => !!(navigator.share);
 function shareButtons(what){
   return `<button type="button" data-share="copy" data-what="${what}">Copy signal</button>
     ${canShare() ? `<button type="button" data-share="native" data-what="${what}">Share…</button>` : ''}
-    ${S.tg.token && S.tg.chat ? `<button type="button" class="tgbtn" data-share="tg" data-what="${what}">Send to Telegram</button>` : ''}`;
+    ${tgToken() && tgChat() ? `<button type="button" class="tgbtn" data-share="tg" data-what="${what}">Send to Telegram</button>` : ''}`;
 }
 // Normalised trade description from a forecast plan or from a fired signal
 function fromPlan(p){
@@ -2072,7 +2103,7 @@ async function copyText(text){
   }
 }
 async function tgApi(method, body){
-  const r = await fetch(`https://api.telegram.org/bot${S.tg.token}/${method}`, {
+  const r = await fetch(`https://api.telegram.org/bot${tgToken()}/${method}`, {
     method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body || {})});
   const j = await r.json().catch(() => ({ok:false, description:'HTTP ' + r.status}));
   if (!j.ok) throw new Error(j.description || 'Telegram error');
@@ -2081,7 +2112,7 @@ async function tgApi(method, body){
 async function tgSend(lines, auto){
   try {
     const html = lines.map((l, k) => k === 0 ? `<b>${esc(l)}</b>` : esc(l)).join('\n');
-    await tgApi('sendMessage', {chat_id: S.tg.chat, text: html, parse_mode:'HTML', disable_web_page_preview:true});
+    await tgApi('sendMessage', {chat_id: tgChat(), text: html, parse_mode:'HTML', disable_web_page_preview:true});
     toast(auto ? `Posted to Telegram: ${lines[0]}` : 'Sent to Telegram');
     return true;
   } catch(e){
@@ -2116,7 +2147,7 @@ function readTgForm(){
 $('t_chatsel').onchange = e => { if (e.target.value) $('t_chat').value = e.target.value; };
 $('t_find').onclick = async () => {
   readTgForm();
-  if (!S.tg.token){ toast('Paste the bot token first.'); return; }
+  if (!tgToken()){ toast('Paste the bot token first.'); return; }
   try {
     const ups = await tgApi('getUpdates', {allowed_updates:['message','channel_post','my_chat_member']});
     const chats = new Map();
@@ -2125,7 +2156,7 @@ $('t_find').onclick = async () => {
     toast(chats.size ? `Found ${chats.size} group${chats.size > 1 ? 's' : ''}. Pick one.` : 'No groups found yet. Add the bot to the group, send a message there, then try again.');
   } catch(e){ toast('Telegram: ' + e.message); }
 };
-$('t_test').onclick = () => { readTgForm(); if (!S.tg.token || !S.tg.chat){ toast('Add the bot token and the group first.'); return; }
+$('t_test').onclick = () => { readTgForm(); if (!tgToken() || !tgChat()){ toast('Add the bot token and the group first.'); return; }
   tgSend(['✅ SMC + S/R Scanner connected', 'Signals from the app will appear here.'], false); };
 
 // ======================= News filter =======================
