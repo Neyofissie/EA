@@ -111,6 +111,8 @@ dialog{overflow-x:hidden}
 .legend{position:absolute;left:10px;top:10px;z-index:4;display:flex;gap:8px;align-items:center;flex-wrap:wrap;pointer-events:none}
 .legend .chip{background:rgba(13,16,23,.85);border:1px solid var(--line);border-radius:8px;padding:5px 10px;font-weight:700}
 .legend .px{font-size:16px;font-variant-numeric:tabular-nums}
+.legend .mtfchip{font-size:12px;font-weight:700;letter-spacing:.02em;white-space:nowrap}
+.mtfcell{font-size:13px;letter-spacing:.06em;white-space:nowrap}
 @media (max-width:900px){
   main{grid-template-columns:1fr;height:auto}
   header h1{width:100%}
@@ -198,12 +200,13 @@ button.mini{padding:3px 8px;font-size:12px;min-height:0}
 
   /* watchlist rows become two-line cards */
   .c-watch thead{display:none}
-  #wl tr{display:grid;grid-template-columns:auto auto minmax(0,1fr) auto;grid-template-areas:"sym sym sym win" "t h s s";
+  #wl tr{display:grid;grid-template-columns:auto auto minmax(0,1fr) auto;grid-template-areas:"sym m m win" "t h s s";
     align-items:center;gap:6px 8px;padding:12px 14px;border-bottom:1px solid var(--line)}
   #wl td{border:0;padding:0;white-space:nowrap}
   #wl td:nth-child(1){grid-area:sym;font-size:15px}
   #wl td:nth-child(2){grid-area:t} #wl td:nth-child(3){grid-area:h} #wl td:nth-child(4){grid-area:s;min-width:0;overflow:hidden}
   #wl td:nth-child(5){grid-area:win;color:var(--muted);font-size:13px}
+  #wl td:nth-child(6){grid-area:m;justify-self:end}
   #wl td:nth-child(2)::before{content:'Trend ';color:var(--muted);font-size:11px}
   #wl td:nth-child(3)::before{content:'HTF ';color:var(--muted);font-size:11px}
   #wl td:nth-child(5):not(:empty)::after{content:' hit';}
@@ -340,7 +343,7 @@ button.mini{padding:3px 8px;font-size:12px;min-height:0}
     <div class="card c-watch">
       <h2>Watchlist scanner <span class="r"><button id="scanAllBtn">Scan all</button></span></h2>
       <div style="overflow:auto"><table>
-        <thead><tr><th>Symbol</th><th>Trend</th><th>HTF</th><th>Setup</th><th title="Share of past setups that reached the alert target">Hit %</th></tr></thead>
+        <thead><tr><th>Symbol</th><th>Trend</th><th>HTF</th><th>Setup</th><th title="Share of past setups that reached the alert target">Hit %</th><th title="Trend on 1D → 5m">Timeframes</th></tr></thead>
         <tbody id="wl"></tbody>
       </table></div>
     </div>
@@ -433,6 +436,9 @@ button.mini{padding:3px 8px;font-size:12px;min-height:0}
     <label>R:R target (e.g. 2 = 2:1)<input id="s_alertrr" type="number" step="0.5" min="1"></label>
     <label>Min past success rate on that chart (%)<input id="s_alertmin" type="number" min="0" max="100"></label>
     <label>Min past setups for the rate to count<input id="s_alertminn" type="number" min="1"></label>
+    <label>Multi-timeframe trend check (1D → 5m)<select id="s_mtfon"><option value="1">On</option><option value="0">Off</option></select></label>
+    <label>Only alert when every timeframe agrees<select id="s_alertmtf"><option value="0">No</option><option value="1">Yes</option></select></label>
+    <label>Timeframe check for the whole watchlist on Twelve Data<select id="s_mtfwatch"><option value="0">No (saves the free plan's requests)</option><option value="1">Yes</option></select></label>
     <label>Apply the same rule to MT5 auto-trading<select id="s_alertgate"><option value="1">Yes</option><option value="0">No</option></select></label>
     <div class="full muted" style="font-size:12px">The rate is the share of earlier setups on the same pair, timeframe and settings that reached the target (default: 2× the risk, before touching the stop). It is shown on the chart's % badge, which turns yellow when a setup meets your rule. It is history, not a guarantee; no setup is ever sure.</div>
     <label>Closed candles only<select id="s_closed"><option value="1">Yes</option><option value="0">No</option></select></label>
@@ -518,7 +524,7 @@ const DEFAULTS = {
   tf:'15m', htf:'4h', auto:'0', tdkey:'',
   tg:{token:'', chat:'', auto:false, setups:false, footer:'Not financial advice. Trade at your own risk.'},
   broker:{token:'', remember:true, accountId:'', auto:false, risk:0.5, maxOpen:3, dayLossPct:3, day:null, magic:240521, suffix:'', map:'', managed:[]},
-  p:{alertBasis:'rr', alertRR:2, alertOn:true, alertMin:50, alertMinN:8, alertGateTrades:true, smcMode:'fast', intSwing:2, htfMode:'ema', htfPd:false, adxMin:0, volLo:0, volHi:0, ltfConfirm:false, news:true, newsBefore:30, newsAfter:30, corr:true, dailyLossR:3, maxOpenBt:3, tpMulti:true, tp1R:1, tp3Mode:'liq', tp3R:3, split:'50/30/20', be:true, view:'clean', poi:'level', choch:false, dispAtr:1.0, session:'both', minConf:0, req:[], strategy:'smc', srTouches:2, zoneW:0.5, srLook:300, tpMode:'zone', minRR:1.5, srTrend:'trend', swing:5, trend:'EMA + Structure', ema:200, htfEma:50, useHtf:true, tol:0.25, maxRetest:20, rej:true, slAtr:0.5, rr:2, fresh:5, closed:true},
+  p:{mtfOn:true, alertMtf:false, mtfWatchTD:false, alertBasis:'rr', alertRR:2, alertOn:true, alertMin:50, alertMinN:8, alertGateTrades:true, smcMode:'fast', intSwing:2, htfMode:'ema', htfPd:false, adxMin:0, volLo:0, volHi:0, ltfConfirm:false, news:true, newsBefore:30, newsAfter:30, corr:true, dailyLossR:3, maxOpenBt:3, tpMulti:true, tp1R:1, tp3Mode:'liq', tp3R:3, split:'50/30/20', be:true, view:'clean', poi:'level', choch:false, dispAtr:1.0, session:'both', minConf:0, req:[], strategy:'smc', srTouches:2, zoneW:0.5, srLook:300, tpMode:'zone', minRR:1.5, srTrend:'trend', swing:5, trend:'EMA + Structure', ema:200, htfEma:50, useHtf:true, tol:0.25, maxRetest:20, rej:true, slAtr:0.5, rr:2, fresh:5, closed:true},
   wl:{
     binance:['BTCUSDT','ETHUSDT','SOLUSDT','BNBUSDT','XRPUSDT','ADAUSDT','DOGEUSDT','AVAXUSDT'],
     twelvedata:['EUR/USD','GBP/USD','USD/JPY','AUD/USD','USD/CAD','GBP/JPY','EUR/JPY','XAU/USD'],
@@ -562,14 +568,19 @@ const cache = new Map(); // key -> {at, data}
 
 async function getCandles(source, symbol, tfKey, limit=1000){
   const tf = tfOf(tfKey), key = [source, symbol, tfKey, limit].join('|');
-  const c = cache.get(key);
   // Twelve Data: with closed candles only, data can't change until the next candle closes,
   // so reuse it until then (saves most of the free plan's 800 requests/day).
   const nextClose = Math.floor(Date.now()/tf.ms)*tf.ms + tf.ms + 15e3;
-  const fresh = !c ? false
+  const isFresh = c => !c ? false
     : source==='twelvedata' ? (S.p.closed ? c.at >= nextClose - tf.ms && Date.now()-c.at < 1800e3 :Date.now()-c.at < 60e3)
     : Date.now()-c.at < 20e3;
-  if (fresh) return c.data;
+  const c = cache.get(key);
+  if (isFresh(c)) return c.data;
+  // a fresh download of the same series with at least as many candles also answers this request
+  for (const [k2, c2] of cache){
+    const [s2, y2, t2, l2] = k2.split('|');
+    if (s2 === source && y2 === symbol && t2 === tfKey && +l2 >= limit && isFresh(c2)) return c2.data.slice(-limit);
+  }
   let data;
   if (source === 'binance'){
     // Binance returns max 1000 candles per request, so page backwards for longer history
@@ -780,8 +791,8 @@ function analyze(cs, p, htfBias, ctx = {}){
     const haveS = prevH!==null && prevL!==null;
     const sUp = haveS && lastH>prevH && lastL>prevL, sDn = haveS && lastH<prevH && lastL<prevL;
     const eUp = i>=3 && c.c>ema[i] && ema[i]>ema[i-3], eDn = i>=3 && c.c<ema[i] && ema[i]<ema[i-3];
-    const tUp = tMode==='Last BOS' ? legDir === 1 : tMode==='EMA' ? eUp : tMode==='Structure' ? sUp : tMode==='EMA + Structure' ? eUp&&sUp : true;
-    const tDn = tMode==='Last BOS' ? legDir === -1 : tMode==='EMA' ? eDn : tMode==='Structure' ? sDn : tMode==='EMA + Structure' ? eDn&&sDn : true;
+    const tUp = tMode==='Last BOS' ? (legDir === 1 || (legDir === 0 && eUp)) : tMode==='EMA' ? eUp : tMode==='Structure' ? sUp : tMode==='EMA + Structure' ? eUp&&sUp : true;
+    const tDn = tMode==='Last BOS' ? (legDir === -1 || (legDir === 0 && eDn)) : tMode==='EMA' ? eDn : tMode==='Structure' ? sDn : tMode==='EMA + Structure' ? eDn&&sDn : true;
     trendDir = tUp && !tDn ? 1 : tDn && !tUp ? -1 : 0;
     trendArr[i] = trendDir;
     loAt[i] = lastL; hiAt[i] = lastH;
@@ -1149,7 +1160,7 @@ function forecastHtml(r){
     ? `${st.wins} of ${st.trades} past setups hit ${S.p.tpMulti ? 'TP1' : 'TP'} (${pct(st.winRate)})${S.p.tpMulti ? `, TP2 ${pct(st.tp2)}, TP3 ${pct(st.tp3)}` : ''} · average ${st.avgR >= 0 ? '+' : ''}${st.avgR.toFixed(2)}R per trade`
     : `Only ${st.trades} finished setup${st.trades===1?'':'s'} in loaded history, too few to judge`;
   const rrLine = st.rrN ? `<div>Reached ${S.p.alertRR}R</div><div>${pct(st.rrRate)} of ${st.rrN} past setups reached ${S.p.alertRR}× risk before the stop${goodOdds(r, p) && p ? ' · <span class="good">meets your alert rule</span>' : ''}</div>` : '';
-  if (!p) return `<div>Setup</div><div class="muted">${r.trendDir && S.p.smcMode === 'fast'
+  if (!p) return `${S.p.mtfOn ? `<div>Timeframes</div><div>${mtfHtml(r.mtf)}</div>` : ''}<div>Setup</div><div class="muted">${r.trendDir && S.p.smcMode === 'fast'
       ? `Current leg is ${r.trendDir === 1 ? 'up' : 'down'}. Waiting for the next ${r.trendDir === 1 ? 'break above an internal high' : 'break below an internal low'} on ${tf}.`
       : `Nothing forming. Trend is not clear enough on ${tf}.`}</div>
     <div>Track record</div><div>${record}</div>`;
@@ -1201,7 +1212,8 @@ function forecastHtml(r){
       `<div>${g.ok === null ? '◻' : g.ok ? '<span class="good">✓</span>' : '<span class="bad">✗</span>'} ${esc(g.name)}</div>`).join('')}</div>` : ''}
     ${newsRow()}
     <div>Track record</div><div>${record}</div>
-    ${rrLine}`;
+    ${rrLine}
+    ${S.p.mtfOn ? `<div>Timeframes</div><div>${mtfHtml(r.mtf)}${r.mtf && r.mtf.aligned && p ? (r.mtf.aligned === p.dir ? ' · <span class="good">all agree with this trade</span>' : ' · <span class="bad">all against this trade</span>') : ''}</div>` : ''}`;
 }
 function newsRow(){
   if (!S.p.news) return '';
@@ -1323,7 +1335,8 @@ function draw(cs, r){
   let ref = cs[0]; for (let k = n-1; k >= 0; k--) if (cs[k].t <= lastT - 86400e3){ ref = cs[k]; break; }
   const chg = (px - ref.c)/ref.c*100;
   legendEl.innerHTML = `<span class="chip">${esc(curSymbol())}</span><span class="chip">${S.tf.toUpperCase()}</span>
-    <span class="chip px">${fmt(px)} <span style="color:${chg >= 0 ? 'var(--up)' : 'var(--down)'};font-size:13px">${chg >= 0 ? '▲' : '▼'} ${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%</span></span>`;
+    <span class="chip px">${fmt(px)} <span style="color:${chg >= 0 ? 'var(--up)' : 'var(--down)'};font-size:13px">${chg >= 0 ? '▲' : '▼'} ${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%</span></span>
+    ${S.p.mtfOn ? `<span class="chip mtfchip" id="mtfChip">${mtfHtml(r.mtf || mtfCached(S.source, curSymbol()))}</span>` : ''}`;
 
   const markers = [];
   // BOS / CHoCH levels
@@ -1736,6 +1749,7 @@ async function scanCurrent(){
   try {
     const {cs, r} = await scanSymbol(S.source, sym, S.tf, S.htf);
     if (cs.length < 50) throw new Error('Not enough candles returned.');
+    if (S.p.mtfOn){ r.mtf = mtfCached(S.source, sym); if (!r.mtf && S.p.alertMtf) r.mtf = await mtfFor(S.source, sym); }
     draw(cs, r);
     $('fc').innerHTML = forecastHtml(r);
     renderMini(r);
@@ -1762,6 +1776,12 @@ async function scanCurrent(){
     LAST_SWING[brokerSymbol(sym)] = {lo: r.loAt[r.loAt.length-1], hi: r.hiAt[r.hiAt.length-1]};
     checkNew(S.source, sym, S.tf, r);
     setStatus(`Updated ${new Date().toLocaleTimeString()} · ${cs.length} candles`);
+    if (S.p.mtfOn && !r.mtf) setTimeout(() => mtfFor(S.source, sym).then(m => {   // after the scan, behind it in the queue
+      r.mtf = m;
+      if (curSymbol().trim() !== sym) return;
+      if ($('mtfChip')) $('mtfChip').innerHTML = mtfHtml(m);
+      $('fc').innerHTML = forecastHtml(r);
+    }).catch(() => {}), 0);
   } catch(e){
     const msg = friendlyError(e, sym);
     setStatus('Scan failed');
@@ -1778,9 +1798,10 @@ function renderWatchlist(){
   const list = S.wl[S.source] || [];
   $('wl').innerHTML = list.map(sym => {
     const x = wlResults[[S.source, sym, S.tf, S.htf].join('|')];
-    const row = !x ? '<td colspan="4" class="muted">–</td>' : x.err ? `<td colspan="4" style="color:var(--down)" title="${esc(x.err)}">error</td>`
+    const row = !x ? '<td colspan="5" class="muted">–</td>' : x.err ? `<td colspan="5" style="color:var(--down)" title="${esc(x.err)}">error</td>`
       : `<td>${dirPill(x.r.trendDir)}</td><td>${S.p.useHtf ? dirPill(x.r.htf) : '–'}</td><td>${statusHtml(x.r)}</td>
-         <td title="${oddsText(x.r)}">${oddsOf(x.r).n >= 3 ? pct(oddsOf(x.r).rate) : ''}</td>`;
+         <td title="${oddsText(x.r)}">${oddsOf(x.r).n >= 3 ? pct(oddsOf(x.r).rate) : ''}</td>
+         <td class="mtfcell" title="${esc(mtfText(x.r.mtf))}">${x.r.mtf ? mtfHtml(x.r.mtf, true) : ''}</td>`;
     return `<tr data-sym="${esc(sym)}"><td><b>${esc(sym)}</b></td>${row}</tr>`;
   }).join('') || '<tr><td colspan="5" class="muted">Add symbols in Settings</td></tr>';
 }
@@ -1792,7 +1813,9 @@ async function scanAll(){
     const sym = list[k];
     setStatus(`Watchlist ${k+1}/${list.length}: ${sym}`);
     const key = [S.source, sym, S.tf, S.htf].join('|');
-    try { const {r} = await scanSymbol(S.source, sym, S.tf, S.htf); wlResults[key] = {r};
+    try { const {r} = await scanSymbol(S.source, sym, S.tf, S.htf);
+      if (mtfWatchOn() || (S.p.mtfOn && S.p.alertMtf)) r.mtf = mtfCached(S.source, sym) || await mtfFor(S.source, sym);
+      wlResults[key] = {r};
       LAST_SWING[brokerSymbol(sym)] = {lo: r.loAt[r.loAt.length-1], hi: r.hiAt[r.hiAt.length-1]}; checkNew(S.source, sym, S.tf, r); }
     catch(e){ wlResults[key] = {err:e.message}; }
     renderWatchlist();
@@ -1843,9 +1866,10 @@ function goodOdds(r, x){
   if (!S.p.alertOn) return true;
   const o = oddsOf(r);
   if (!(o.n >= S.p.alertMinN && o.rate*100 >= S.p.alertMin)) return false;
+  if (S.p.alertMtf && x && (!r.mtf || r.mtf.aligned !== x.dir)) return false;      // every timeframe must agree
   return S.p.alertBasis !== 'rr' || !x || setupRR(x) >= S.p.alertRR - 1e-9;
 }
-const oddsText = r => { const o = oddsOf(r); return o.n ? `${pct(o.rate)} of ${o.n} past setups ${o.what}` : 'no history yet'; };
+const oddsText = r => { const o = oddsOf(r); return (o.n ? `${pct(o.rate)} of ${o.n} past setups ${o.what}` : 'no history yet') + (r.mtf ? ` · timeframes ${r.mtf.aligned ? 'aligned ' + (r.mtf.aligned === 1 ? '▲' : '▼') : 'mixed'}` : ''); };
 // System notification; through the service worker when there is one (needed on Android and for iPhone home-screen apps)
 async function notify(title, body){
   try {
@@ -1922,7 +1946,7 @@ $('bt_tables').onclick = e => {
   e.target.textContent = 'Applied'; toast('Settings applied. Run the backtest again to see full results.'); scanCurrent();
 };
 
-const F = [['s_alertbasis','alertBasis',String],['s_alertrr','alertRR',Number],['s_alerton','alertOn',v=>v==='1'],['s_alertmin','alertMin',Number],['s_alertminn','alertMinN',Number],['s_alertgate','alertGateTrades',v=>v==='1'],
+const F = [['s_mtfon','mtfOn',v=>v==='1'],['s_alertmtf','alertMtf',v=>v==='1'],['s_mtfwatch','mtfWatchTD',v=>v==='1'],['s_alertbasis','alertBasis',String],['s_alertrr','alertRR',Number],['s_alerton','alertOn',v=>v==='1'],['s_alertmin','alertMin',Number],['s_alertminn','alertMinN',Number],['s_alertgate','alertGateTrades',v=>v==='1'],
   ['s_smcmode','smcMode',String],['s_intswing','intSwing',Number],['s_htfmode','htfMode',String],['s_htfpd','htfPd',v=>v==='1'],['s_adx','adxMin',Number],['s_ltf','ltfConfirm',v=>v==='1'],
   ['s_vollo','volLo',Number],['s_volhi','volHi',Number],['s_news','news',v=>v==='1'],['s_newsb','newsBefore',Number],['s_newsa','newsAfter',Number],
   ['s_corr','corr',v=>v==='1'],['s_maxopenbt','maxOpenBt',Number],['s_dayloss','dailyLossR',Number],
@@ -1954,6 +1978,49 @@ $('saveSettings').onclick = () => {
   renderHeader(); scanCurrent();
 };
 $('notifyBtn').onclick = enableNotifications;
+
+// ======================= Multi-timeframe trend =======================
+// Trend on every timeframe from 1D down to 5m (plus the chart and HTF timeframes), with the strategy's own trend rule.
+const MTF = {};
+function mtfList(){
+  const idx = k => TFS.findIndex(t => t.k === k);
+  const set = new Set(['1d', '4h', '1h', '15m', '5m', S.tf, S.htf]);
+  return [...set].filter(k => idx(k) >= 0).sort((a, b) => idx(b) - idx(a));
+}
+async function trendOn(source, sym, tfKey){
+  const tf = tfOf(tfKey);
+  const cs = (await getCandles(source, sym, tfKey, 500)).filter(c => c.t + tf.ms <= Date.now());
+  if (cs.length < 60) return 0;
+  const p2 = {...S.p, strategy:'smc', useHtf:false, ltfConfirm:false, adxMin:0, volLo:0, volHi:0};
+  return analyze(cs, p2, new Array(cs.length).fill(0)).trendDir;
+}
+const mtfKey = (source, sym) => [source, sym, S.p.smcMode, S.p.trend, S.p.ema, S.p.swing, S.p.intSwing, mtfList().join(',')].join('|');
+function mtfCached(source, sym){
+  const m = MTF[mtfKey(source, sym)];
+  return m && Date.now() - m.at < 5*60e3 ? m : null;
+}
+async function mtfFor(source, sym){
+  const list = [];
+  for (const k of mtfList()){
+    let dir = null;
+    try { dir = await trendOn(source, sym, k); } catch(e){}
+    list.push({tf:k, dir});
+  }
+  const ok = list.filter(e => e.dir !== null), ups = ok.filter(e => e.dir === 1).length, downs = ok.filter(e => e.dir === -1).length;
+  const m = {at:Date.now(), list, ups, downs, total:list.length,
+    aligned: ok.length === list.length && ups === list.length ? 1 : ok.length === list.length && downs === list.length ? -1 : 0};
+  MTF[mtfKey(source, sym)] = m;
+  return m;
+}
+function mtfHtml(m, compact){
+  if (!m) return '<span class="muted">checking timeframes…</span>';
+  const arrows = m.list.map(e => `<span class="${e.dir === 1 ? 'good' : e.dir === -1 ? 'bad' : 'muted'}">${compact ? '' : e.tf.toUpperCase() + ' '}${e.dir === 1 ? '▲' : e.dir === -1 ? '▼' : '–'}</span>`).join(compact ? '' : ' ');
+  const badge = m.aligned ? `<b class="${m.aligned === 1 ? 'good' : 'bad'}">${compact ? '' : 'ALIGNED '}${m.aligned === 1 ? '▲' : '▼'}</b>`
+    : `<span class="muted">${compact ? `${Math.max(m.ups, m.downs)}/${m.total}` : `MIXED ${m.ups}▲ ${m.downs}▼`}</span>`;
+  return `${arrows} · ${badge}`;
+}
+const mtfText = m => m ? m.list.map(e => `${e.tf.toUpperCase()} ${e.dir === 1 ? '▲' : e.dir === -1 ? '▼' : '–'}`).join(' ') + (m.aligned ? ` (all ${m.aligned === 1 ? 'up' : 'down'})` : ' (mixed)') : '';
+const mtfWatchOn = () => S.p.mtfOn && (S.source !== 'twelvedata' || S.p.mtfWatchTD);
 
 // ======================= Share / Telegram =======================
 const SHARE = {sym:'', tf:'', plan:null, signals:[], stats:null};
@@ -1990,6 +2057,8 @@ function signalLines(sym, tf, x){
   if (x.conf){ const c = CONF_KEYS.filter(k => x.conf[k]).map(k => CONF_LABEL[k]); if (c.length) L.push(`Confluence: ${c.join(', ')} (${x.score}/6)`); }
   if (SHARE.stats && SHARE.stats.trades >= 3 && SHARE.sym === sym) L.push(`Track record here: ${pct(SHARE.stats.winRate)} reached TP1 (${SHARE.stats.trades} setups)`);
   L.push('', `🕒 ${new Date(x.t || Date.now()).toLocaleString('en-GB', {timeZone:'UTC', day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'})} UTC`);
+  const mt = S.p.mtfOn ? mtfCached(S.source, sym) : null;
+  if (mt) L.splice(L.length - 1, 0, `Timeframes: ${mtfText(mt)}`);
   if (S.tg.footer) L.push(`⚠️ ${S.tg.footer}`);
   return L;
 }

@@ -157,3 +157,9 @@ Fast mode produces more setups. Compare both on your pairs with the Backtest or 
 - **When an alert fires:** that rate must be at least *min %* over at least *min past setups*, and the setup's own target (TP2) must be at least 2:1.
 - **Where you see it:** the chart's % badge, the watchlist *Hit %* and the Forecast's *Reached 2R* line all show this rate. The badge turns **yellow** when a setup meets the rule.
 - **Choosing the %:** by pure chance a 2:1 target is reached about one time in three. Charts at 50–60%+ are already strong, so the default is 50%.
+
+## Multi-timeframe trend
+- **What you see:** every scan shows the trend on **1D → 4H → 1H → 15m → 5m** (plus your chart and HTF timeframes), using the strategy's own trend rule. For example **1D ▲ 4H ▲ 1H ▲ 15M ▲ 5M ▲ · ALIGNED ▲**, or *MIXED 3▲ 2▼*.
+- **Where:** the chart legend, the Forecast (*Timeframes*, plus whether they agree with the trade), the watchlist *Timeframes* column and Telegram messages.
+- **Settings → Alerts → Only alert when every timeframe agrees:** alerts fire only if all timeframes point the same way as the trade.
+- **Twelve Data free plan:** the check costs about 3 extra requests for the chart you are viewing, cached for up to 30 minutes, and arrives a few seconds after the chart. For the whole watchlist it is off by default on Twelve Data and can be switched on in Settings.
