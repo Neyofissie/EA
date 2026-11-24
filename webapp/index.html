@@ -135,6 +135,17 @@ button:disabled{opacity:.7;cursor:progress}
 @keyframes spin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){#scanBtn.busy .ico{animation:none}}
 .mobonly,.bnav,.fcmini{display:none}
+.srcbtn{display:inline-flex;align-items:center;gap:6px;font-weight:600;border-color:var(--accent)}
+.srcdot{width:8px;height:8px;border-radius:50%;background:var(--muted);display:inline-block}
+.srcdot.ok{background:var(--up)} .srcdot.bad{background:var(--down)}
+.srcopt{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 12px;align-items:start;text-align:left;width:100%;padding:12px 14px;border-radius:12px;margin-bottom:10px}
+.srcopt.on{border-color:var(--accent);background:#1b2a45}
+.srcopt input{margin-top:3px;width:18px;height:18px;min-height:0}
+.srcopt b{font-size:15px}
+.srcopt .sub{grid-column:2;color:var(--muted);font-size:13px}
+.srcopt .row{grid-column:2;display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px}
+.srcopt .row{min-width:0}
+.srcopt .row select{flex:1 1 160px;min-width:0;max-width:100%}
 .fitbtn{position:absolute;top:8px;z-index:5;padding:4px 10px;font-size:12px;font-weight:600;border-radius:999px;min-height:0;
   background:rgba(13,16,23,.88);border:1px solid var(--accent);color:#93c5fd}
 .fcact{grid-column:1/-1;display:flex;gap:8px;flex-wrap:wrap;padding-bottom:4px;border-bottom:1px solid var(--line);margin-bottom:2px;padding-bottom:12px}
@@ -173,6 +184,7 @@ button.mini{padding:3px 8px;font-size:12px;min-height:0}
   .tfs{gap:4px}
   .tfs button{min-width:42px;height:36px;min-height:36px;border-radius:999px;padding:0 10px;font-weight:600}
   .rail select{height:36px;min-height:36px;border-radius:999px;padding:0 10px;font-size:14px;max-width:190px}
+  .rail .srcbtn{height:36px;min-height:36px;border-radius:999px;padding:0 12px;font-size:14px}
   .rail .chip-l{display:flex;align-items:center;gap:6px;font-size:13px}
 
   main{display:block;padding:0;height:auto}
@@ -258,6 +270,9 @@ button.mini{padding:3px 8px;font-size:12px;min-height:0}
   <button class="primary iconbtn" id="scanBtn" aria-label="Scan chart">
     <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.6-6.4L21 8"/><path d="M21 3v5h-5"/></svg><span>Scan chart</span></button>
   <div class="rail" id="rail">
+    <button type="button" id="srcBtn" class="srcbtn" aria-haspopup="dialog" title="Change the chart data server">
+      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></svg>
+      <span id="srcLabel">Server</span><i class="srcdot" id="srcDot"></i><span aria-hidden="true">▾</span></button>
     <div class="tfs" id="tfs"></div>
     <label class="muted chip-l">HTF <select id="htf"></select></label>
     <select id="strategy" title="Strategy" aria-label="Strategy">
@@ -265,7 +280,7 @@ button.mini{padding:3px 8px;font-size:12px;min-height:0}
       <option value="sr">Support &amp; Resistance</option>
       <option value="both">Both strategies</option>
     </select>
-    <select id="source" title="Data source" aria-label="Data source">
+    <select id="source" title="Data source" aria-label="Data source" hidden>
       <option value="binance">Crypto (Binance)</option>
       <option value="twelvedata">Forex / Gold / Indices (Twelve Data)</option>
       <option value="demo">Demo data</option>
@@ -357,6 +372,31 @@ button.mini{padding:3px 8px;font-size:12px;min-height:0}
     </div>
   </aside>
 </main>
+
+<dialog id="srcDlg" aria-labelledby="srcTitle">
+  <div class="dhead"><h3 id="srcTitle">Chart data server</h3><button type="button" class="xbtn" autofocus aria-label="Close" onclick="this.closest('dialog').close()">✕</button></div>
+  <p class="muted" style="margin:0 0 12px;font-size:13px">Where the app downloads candles from. Pick the one that works from your country and has your market.</p>
+  <label class="srcopt" data-src="twelvedata"><input type="radio" name="srcpick" value="twelvedata">
+    <b>Twelve Data</b><span class="sub">Forex, gold (XAU/USD), indices, stocks and crypto (BTC/USD). Needs a free key; 8 requests a minute.</span>
+    <span class="row"><span id="tdState" class="muted"></span><button type="button" data-test="twelvedata">Test</button></span></label>
+  <label class="srcopt" data-src="binance"><input type="radio" name="srcpick" value="binance">
+    <b>Binance</b><span class="sub">Crypto pairs like BTCUSDT. No key needed. Blocked in some countries; pick another server below if so.</span>
+    <span class="row"><select id="binPick" aria-label="Binance server">
+      <option value="auto">Auto: try every server (recommended)</option>
+      <option value="https://data-api.binance.vision">data-api.binance.vision (market data)</option>
+      <option value="https://api.binance.com">api.binance.com</option>
+      <option value="https://api1.binance.com">api1.binance.com</option>
+      <option value="https://api3.binance.com">api3.binance.com</option>
+      <option value="https://api.binance.us">Binance US (api.binance.us)</option>
+    </select><button type="button" data-test="binance">Test</button></span>
+    <span class="sub" id="binState"></span></label>
+  <label class="srcopt" data-src="demo"><input type="radio" name="srcpick" value="demo">
+    <b>Demo data</b><span class="sub">Made-up candles for trying the app. Never traded.</span></label>
+  <div class="actions" style="display:flex;gap:8px;justify-content:flex-end;margin-top:6px">
+    <button type="button" onclick="this.closest('dialog').close()">Cancel</button>
+    <button type="button" class="primary" id="srcApply">Use this server</button>
+  </div>
+</dialog>
 
 <nav class="bnav" id="bnav" aria-label="Sections">
   <button data-v="chart" class="on" type="button"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v3M7 17v3M12 3v4M12 15v6M17 6v3M17 15v3"/><rect x="5" y="7" width="4" height="10" rx="1"/><rect x="10" y="7" width="4" height="8" rx="1"/><rect x="15" y="9" width="4" height="6" rx="1"/></svg><span>Chart</span></button>
@@ -528,7 +568,7 @@ const CONF_LABEL = {OB:'Order block', FVG:'Fair value gap', Sweep:'Liquidity swe
 
 const DEFAULTS = {
   source:'binance', symbol:{binance:'BTCUSDT', twelvedata:'EUR/USD', demo:'DEMO-1'},
-  tf:'15m', htf:'4h', auto:'0', tdkey:'',
+  tf:'15m', htf:'4h', auto:'0', tdkey:'', binPref:'auto',
   tg:{token:'', chat:'', auto:false, setups:false, footer:'Not financial advice. Trade at your own risk.'},
   broker:{token:'', remember:true, accountId:'', auto:false, risk:0.5, maxOpen:3, dayLossPct:3, day:null, magic:240521, suffix:'', map:'', managed:[]},
   p:{mtfOn:true, alertMtf:false, mtfWatchTD:false, alertBasis:'rr', alertRR:2, alertOn:true, alertMin:50, alertMinN:8, alertGateTrades:true, smcMode:'fast', intSwing:2, htfMode:'ema', htfPd:false, adxMin:0, volLo:0, volHi:0, ltfConfirm:false, news:true, newsBefore:30, newsAfter:30, corr:true, dailyLossR:3, maxOpenBt:3, tpMulti:true, tp1R:1, tp3Mode:'liq', tp3R:3, split:'50/30/20', be:true, view:'clean', poi:'level', choch:false, dispAtr:1.0, session:'both', minConf:0, req:[], strategy:'smc', srTouches:2, zoneW:0.5, srLook:300, tpMode:'zone', minRR:1.5, srTrend:'trend', swing:5, trend:'EMA + Structure', ema:200, htfEma:50, useHtf:true, tol:0.25, maxRetest:20, rej:true, slAtr:0.5, rr:2, fresh:5, closed:true},
@@ -584,7 +624,8 @@ const BIN_HOSTS = ['https://data-api.binance.vision', 'https://api.binance.com',
 let binHost = null;
 try { binHost = localStorage.getItem('smc-binhost'); } catch(e){}
 async function binanceFetch(path){
-  const order = binHost ? [binHost].concat(BIN_HOSTS.filter(h => h !== binHost)) : BIN_HOSTS.slice();
+  const pref = S.binPref && S.binPref !== 'auto' ? S.binPref : null;          // a server picked by hand is the only one used
+  const order = pref ? [pref] : binHost ? [binHost].concat(BIN_HOSTS.filter(h => h !== binHost)) : BIN_HOSTS.slice();
   let lastErr = null;
   for (const host of order){
     try {
@@ -1777,6 +1818,7 @@ function toast(msg){
 
 function renderHeader(){
   $('source').value = S.source;
+  if ($('srcLabel')) renderSrcBtn();
   $('strategy').value = S.p.strategy;
   $('symbol').value = curSymbol();
   $('symlist').innerHTML = (S.wl[S.source]||[]).map(s => `<option value="${esc(s)}">`).join('');
@@ -1838,6 +1880,7 @@ async function scanCurrent(){
     LAST_SWING[brokerSymbol(sym)] = {lo: r.loAt[r.loAt.length-1], hi: r.hiAt[r.hiAt.length-1]};
     checkNew(S.source, sym, S.tf, r);
     setStatus(`Updated ${new Date().toLocaleTimeString()} · ${cs.length} candles`);
+    srcHealth[S.source] = true; renderSrcBtn();
     if (S.p.mtfOn && !r.mtf) setTimeout(() => mtfFor(S.source, sym).then(m => {   // after the scan, behind it in the queue
       r.mtf = m;
       if (curSymbol().trim() !== sym) return;
@@ -1848,6 +1891,7 @@ async function scanCurrent(){
     const msg = friendlyError(e, sym);
     setStatus('Scan failed');
     clearChart();
+    if (/reach|blocked|Failed to fetch/i.test(msg)){ srcHealth[S.source] = false; renderSrcBtn(); }
     $('cur').innerHTML = `<div>Error</div><div style="color:var(--down)">${esc(msg)}</div>`;
     legendEl.innerHTML = `<span class="chip" style="color:var(--down);max-width:min(560px,80vw);white-space:normal">${esc(msg)}</span>`;
     toast(msg);
@@ -1970,6 +2014,58 @@ function setAuto(){
 }
 
 // events
+// ----- data server picker -----
+const SRC_NAME = {twelvedata:'Twelve Data', binance:'Binance', demo:'Demo data'};
+const HOST_NAME = {'https://data-api.binance.vision':'Data API', 'https://api.binance.com':'Main', 'https://api1.binance.com':'Mirror 1',
+  'https://api3.binance.com':'Mirror 3', 'https://api.binance.us':'US'};
+let srcHealth = {};                                   // source -> true / false from the last scan or test
+function renderSrcBtn(){
+  $('srcLabel').textContent = SRC_NAME[S.source] + (S.source === 'binance' && S.binPref && S.binPref !== 'auto' ? ' · ' + (HOST_NAME[S.binPref] || S.binPref) : '');
+  const h = srcHealth[S.source];
+  $('srcDot').className = 'srcdot' + (h === true ? ' ok' : h === false ? ' bad' : '');
+}
+function renderSrcDlg(pick, opening){
+  for (const el of document.querySelectorAll('#srcDlg .srcopt')) el.classList.toggle('on', el.dataset.src === pick);
+  for (const r of document.querySelectorAll('input[name="srcpick"]')) r.checked = r.value === pick;
+  $('tdState').innerHTML = tdKey() ? `<span class="good">✓</span> key ${S.tdkey ? 'saved on this device' : 'built into the app'}` : '<span class="bad">no key yet</span> (add it in Settings)';
+  if (opening) $('binPick').value = S.binPref || 'auto';
+  $('binState').textContent = binHost ? `Last working server: ${binHost.replace('https://', '')}` : '';
+}
+async function testSource(src){
+  const btn = document.querySelector(`[data-test="${src}"]`), old = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Testing…';
+  const t0 = performance.now();
+  try {
+    if (src === 'binance'){
+      const keep = S.binPref; S.binPref = $('binPick').value;
+      try { const r = await binanceFetch('/api/v3/ping'); if (!r.ok) throw new Error('HTTP ' + r.status); } finally { S.binPref = keep; }
+    } else {
+      if (!tdKey()) throw new Error('add your key in Settings first');
+      const j = await (await fetch(`https://api.twelvedata.com/time_series?symbol=EUR/USD&interval=1h&outputsize=2&apikey=${encodeURIComponent(tdKey())}`)).json();
+      if (j.status === 'error') throw new Error(j.message || 'error');
+    }
+    srcHealth[src] = true;
+    toast(`${SRC_NAME[src]}: working (${Math.round(performance.now() - t0)} ms)${src === 'binance' && binHost ? ' via ' + binHost.replace('https://', '') : ''}`);
+  } catch(e){
+    srcHealth[src] = false;
+    toast(`${SRC_NAME[src]}: not reachable from here (${e.message || e}).${src === 'binance' ? ' Try another Binance server or Twelve Data.' : ''}`);
+  } finally { btn.disabled = false; btn.textContent = old; renderSrcBtn(); renderSrcDlg(document.querySelector('input[name="srcpick"]:checked')?.value || S.source); }
+}
+$('srcBtn').onclick = () => { renderSrcDlg(S.source, true); $('srcDlg').showModal(); };
+$('srcDlg').addEventListener('change', e => { if (e.target.name === 'srcpick') renderSrcDlg(e.target.value); });
+$('srcDlg').addEventListener('click', e => { const t = e.target.closest('[data-test]'); if (t){ e.preventDefault(); testSource(t.dataset.test); } });
+$('srcApply').onclick = () => {
+  const pick = document.querySelector('input[name="srcpick"]:checked')?.value || S.source;
+  const binPref = $('binPick').value;
+  const changed = pick !== S.source || (pick === 'binance' && binPref !== (S.binPref || 'auto'));
+  S.binPref = binPref;
+  if (pick === 'binance' && binPref !== 'auto') binHost = binPref;
+  S.source = pick; save(); cache.clear(); $('srcDlg').close();
+  renderHeader(); renderSrcBtn();
+  if (changed){ toast(`Chart server: ${SRC_NAME[pick]}${pick === 'binance' ? (binPref === 'auto' ? ' (auto)' : ' · ' + (HOST_NAME[binPref] || binPref)) : ''}`); scanCurrent(); }
+  if ($('tabTv').classList.contains('on')) showTv();
+};
+
 $('source').onchange = e => { S.source = e.target.value; save(); renderHeader(); scanCurrent(); if ($('tabTv').classList.contains('on')) showTv(); };
 $('symbol').onchange = e => {
   let sym = e.target.value.trim();
