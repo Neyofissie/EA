@@ -180,3 +180,10 @@ Fast mode produces more setups. Compare both on your pairs with the Backtest or 
 - **Typing a broker index name** switches to Twelve Data automatically: **US30** (also DJ30, WS30), **NAS100** (US100, USTEC) or **SPX500** (US500).
 - **Data source:** the app first asks Twelve Data for the index itself (DJI / NDX / SPX). If your plan doesn't include it, it uses the ETF that tracks it (DIA / QQQ / SPY) and says so in the status line. The ETF moves the same way but only trades in US market hours. The choice is remembered.
 - **Elsewhere:** the TradingView tab shows the real index. MT5 orders use your broker's name (US30 + your suffix, or the name map in Broker settings). News and correlation treat these indices as USD-linked.
+
+## Scanning animation
+- **The lamp:** while a chart scan is running, a scanner-lamp light glides left → right across the candles, brightening them as it passes. It eases in and out like a real scanner carriage.
+- **The label** shows the real step: *Downloading candles…*, *Reading 4H trend…*, *Reading structure…*, *Drawing the setup…*. On Twelve Data's free plan it counts down: *Waiting 6 s for the free-plan data limit*.
+- **When the scan ends:** the lamp slows to a stop at the latest candle and fades. The trade box is then laid down from the entry line (about 0.3 s), and the Setup tab dot pulses once if a setup is ready. Fast scans get one short pass.
+- **When a scan fails:** the lamp stops where it is and turns red (*Scan stopped*) before the error shows.
+- **Reduce Motion:** if it is turned on in the phone or computer settings, there is no lamp or draw-in, only the label.

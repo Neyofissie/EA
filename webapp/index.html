@@ -135,6 +135,32 @@ button:disabled{opacity:.7;cursor:progress}
 @keyframes spin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){#scanBtn.busy .ico{animation:none}}
 .mobonly,.bnav,.fcmini{display:none}
+/* scanning light bar: a scanner lamp gliding across the candles */
+#scanfx,#scanlamp{position:absolute;left:0;top:0;pointer-events:none;overflow:hidden;opacity:0;transition:opacity .25s ease}
+#scanfx{z-index:5} #scanlamp{z-index:3;mix-blend-mode:screen}
+#scanfx.on,#scanlamp.on{opacity:1}
+#scanlamp .beam{position:absolute;top:0;bottom:0;left:0;width:90px;will-change:transform;
+  background:linear-gradient(90deg,rgba(59,130,246,0) 0%,rgba(59,130,246,.10) 45%,rgba(96,165,250,.28) 80%,rgba(147,197,253,.55) 94%,rgba(219,234,254,.95) 98%,rgba(255,255,255,1) 100%)}
+#scanlamp .beam::after{content:"";position:absolute;right:-10px;top:0;bottom:0;width:16px;background:linear-gradient(90deg,rgba(147,197,253,.35),rgba(147,197,253,0))}
+#scanlamp.err .beam{background:linear-gradient(90deg,rgba(239,68,68,0) 0%,rgba(239,68,68,.08) 55%,rgba(248,113,113,.28) 88%,rgba(254,202,202,.95) 100%)}
+#scanfx .stage{position:absolute;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:8px;white-space:nowrap;
+  background:rgba(13,16,23,.9);border:1px solid rgba(96,165,250,.45);color:#bfdbfe;font-size:12px;font-weight:600;padding:5px 12px;border-radius:999px;
+  font-variant-numeric:tabular-nums}
+#scanfx .stage i{width:7px;height:7px;border-radius:50%;background:#60a5fa;animation:breathe 1.4s ease-in-out infinite}
+#scanfx.err .stage{border-color:rgba(239,68,68,.6);color:#fecaca} #scanfx.err .stage i{background:#ef4444;animation:none}
+@keyframes breathe{0%,100%{opacity:.35;transform:scale(.8)}50%{opacity:1;transform:scale(1)}}
+/* trade box laid down from the entry line */
+.ovr.grow{animation:layDown .34s cubic-bezier(.2,.8,.2,1) both}
+.ovr.grow.from-b{transform-origin:50% 100%} .ovr.grow.from-t{transform-origin:50% 0}
+@keyframes layDown{from{transform:scaleY(0);opacity:.2}to{transform:scaleY(1);opacity:1}}
+.ovt.grow{animation:tagIn .28s ease-out .22s both}
+@keyframes tagIn{from{opacity:0;translate:0 4px}to{opacity:1;translate:0 0}}
+.bnav .dot.pulse{animation:dotPulse .9s ease-out 1}
+@keyframes dotPulse{0%{box-shadow:0 0 0 0 rgba(245,158,11,.7)}100%{box-shadow:0 0 0 10px rgba(245,158,11,0)}}
+@media (prefers-reduced-motion:reduce){
+  #scanlamp{display:none}
+  #scanfx .stage i,.ovr.grow,.ovt.grow,.bnav .dot.pulse{animation:none}
+}
 .srcbtn{display:inline-flex;align-items:center;gap:6px;font-weight:600;border-color:var(--accent)}
 .srcdot{width:8px;height:8px;border-radius:50%;background:var(--muted);display:inline-block}
 .srcdot.ok{background:var(--up)} .srcdot.bad{background:var(--down)}
@@ -614,7 +640,7 @@ function pumpQueue(src, gapMs){
   const q = RQ[src];
   if (q.timer || !q.items.length) return;
   const wait = Math.max(0, q.last + gapMs - Date.now());
-  if (wait > 1500 && chartScanSym && src === 'twelvedata') setStatus(`Waiting ${Math.ceil(wait/1000)} s for Twelve Data's free-plan limit (8 requests a minute)…`);
+  if (wait > 1500 && chartScanSym && src === 'twelvedata'){ setStatus(`Waiting ${Math.ceil(wait/1000)} s for Twelve Data's free-plan limit (8 requests a minute)…`); scanFx.wait(wait); }
   q.timer = setTimeout(() => { q.timer = null; q.last = Date.now(); const r = q.items.shift(); r(); pumpQueue(src, gapMs); }, wait);
 }
 const cache = new Map(); // key -> {at, data}
@@ -1228,7 +1254,9 @@ async function loadAndAnalyze(source, symbol, tfKey, htfKey, n, closedOnly){
   const p = S.p, tf = tfOf(tfKey), htf = tfOf(htfKey);
   let cs = await getCandles(source, symbol, tfKey, n);
   if (closedOnly) cs = cs.filter(c => c.t + tf.ms <= Date.now());
+  if (symbol === chartScanSym && p.useHtf) scanFx.stage(`Reading ${htfKey.toUpperCase()} trend…`);
   const ctx = await loadContext(source, symbol, tfKey, htfKey, n, cs);
+  if (symbol === chartScanSym) scanFx.stage('Reading structure…');
   return {cs, ctx, r: analyze(cs, p, ctx.bias, ctx)};
 }
 // Higher-timeframe bias/structure and lower-timeframe candles needed by the filters
@@ -1360,6 +1388,68 @@ candles.applyOptions({autoscaleInfoProvider: orig => {   // keep the whole TP / 
   return r;
 }});
 const ovEl = document.createElement('div'); ovEl.id = 'ov'; $('chart').appendChild(ovEl);
+
+// ======================= Scanning light bar =======================
+// A soft lamp glides left→right (the direction of time) while the app is really working, slows to a stop at the
+// latest candle when the scan ends, and turns red and stops where it is if the scan fails.
+const scanFx = (() => {
+  const lamp = document.createElement('div'); lamp.id = 'scanlamp'; lamp.innerHTML = '<div class="beam"></div>';
+  const el = document.createElement('div'); el.id = 'scanfx';
+  el.innerHTML = '<div class="stage" role="status" aria-live="polite"><i></i><span></span></div>';
+  $('chart').appendChild(lamp); $('chart').appendChild(el);
+  const beam = lamp.querySelector('.beam'), label = el.querySelector('.stage span'), pill = el.querySelector('.stage');
+  // keep both layers' classes in step
+  const cls = (name, on) => { el.classList.toggle(name, on); lamp.classList.toggle(name, on); };
+  const reduce = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let anim = null, active = false, started = 0, countdown = null, endTimer = null;
+  const size = () => {
+    const ts = chart.timeScale(), W = ts.width(), H = Math.max(0, $('chart').clientHeight - ts.height());
+    for (const x of [el, lamp]){ x.style.width = W + 'px'; x.style.height = H + 'px'; }
+    pill.style.bottom = '10px';
+    return {W, H};
+  };
+  const beamX = () => { const m = new DOMMatrixReadOnly(getComputedStyle(beam).transform); return m.m41; };
+  function start(text){
+    clearTimeout(endTimer); clearInterval(countdown); countdown = null;
+    cls('err', false); stage(text); active = true; started = performance.now();
+    if ($('chart').style.display === 'none') return;
+    const {W} = size(); cls('on', true);
+    if (anim) anim.cancel();
+    if (reduce()) return;
+    // accelerate out of the left edge, glide, decelerate into the right edge, like a scanner carriage
+    anim = beam.animate([{transform:'translateX(-90px)'}, {transform:`translateX(${W}px)`}],
+      {duration: Math.max(1100, Math.min(2000, W*2.2)), easing:'cubic-bezier(.45,.05,.3,1)', iterations:Infinity});
+  }
+  function stage(text){ clearInterval(countdown); countdown = null; label.textContent = text; }
+  // "Waiting 6 s for data limit", counting down by itself
+  function wait(ms){
+    if (!active) return;
+    clearInterval(countdown);
+    const end = Date.now() + ms;
+    const tick = () => { const left = Math.ceil((end - Date.now())/1000); label.textContent = left > 0 ? `Waiting ${left} s for the free-plan data limit` : 'Downloading candles…'; if (left <= 0){ clearInterval(countdown); countdown = null; } };
+    tick(); countdown = setInterval(tick, 250);
+  }
+  function finish(ok, lastX){
+    if (!active) return;
+    active = false; clearInterval(countdown); countdown = null;
+    if (!ok){
+      cls('err', true); label.textContent = 'Scan stopped';
+      if (anim) anim.pause();                                       // a jammed scanner stops where it is
+      endTimer = setTimeout(() => { cls('on', false); if (anim){ anim.cancel(); anim = null; } }, 900);
+      return;
+    }
+    label.textContent = 'Done';
+    if (!anim || reduce()){ endTimer = setTimeout(() => cls('on', false), 350); return; }
+    const {W} = size(), from = beamX(), to = Math.min(W, Math.max(0, (lastX ?? W) + 4)) - 90;
+    anim.cancel();
+    // quick scans get one short pass; slow ones ease from wherever the lamp is to the latest candle
+    const quick = performance.now() - started < 500;
+    anim = beam.animate([{transform:`translateX(${quick ? -90 : Math.min(from, to)}px)`}, {transform:`translateX(${to}px)`}],
+      {duration: quick ? 420 : 480, easing:'cubic-bezier(.2,.7,.2,1)', fill:'forwards'});
+    endTimer = setTimeout(() => { cls('on', false); setTimeout(() => { if (anim && !active){ anim.cancel(); anim = null; } }, 300); }, quick ? 420 : 520);
+  }
+  return {start, stage, wait, finish, isActive: () => active};
+})();
 const legendEl = document.createElement('div'); legendEl.className = 'legend'; $('chart').appendChild(legendEl);
 // HTML overlay (rectangles + tags) positioned from bar index and price, redrawn whenever the view moves
 function drawOverlay(){
@@ -1368,18 +1458,22 @@ function drawOverlay(){
   ovEl.style.width = W + 'px'; ovEl.style.height = H + 'px';
   const X = l => ts.logicalToCoordinate(l), Y = v => candles.priceToCoordinate(v);
   let html = '';
+  // the trade box is laid down once after a scan; redraws during that moment continue the same animation
+  const animAt = OV.animStart ? performance.now() - OV.animStart : Infinity;
   for (const r of OV.rects){
     const x0 = X(r.l0), x1 = X(r.l1), y0 = Y(r.p0), y1 = Y(r.p1);
     if ([x0, x1, y0, y1].some(v => v === null)) continue;
     const left = Math.max(-2, Math.min(x0, x1)), right = Math.min(W + 2, Math.max(x0, x1));
     if (right <= left) continue;
-    html += `<div class="ovr ${r.cls}" style="left:${left}px;top:${Math.min(y0, y1)}px;width:${right - left}px;height:${Math.max(2, Math.abs(y1 - y0))}px">${r.label ? `<span>${r.label}</span>` : ''}</div>`;
+    const grow = animAt < 700 && /tpbox|slbox/.test(r.cls) ? ` grow ${r.from || ''}` : '';
+    html += `<div class="ovr ${r.cls}${grow}" style="${grow ? `animation-delay:-${animAt}ms;` : ''}left:${left}px;top:${Math.min(y0, y1)}px;width:${right - left}px;height:${Math.max(2, Math.abs(y1 - y0))}px">${r.label ? `<span>${r.label}</span>` : ''}</div>`;
   }
   for (const t of OV.tags){
     const x = X(t.l), y = Y(t.p);
     if (x === null || y === null) continue;
     html += `<div class="ovt ${t.cls}" style="left:${x}px;top:${y}px"${t.title ? ` title="${t.title}"` : ''}>${t.text}</div>`;
   }
+  if (animAt < 700) html = html.replace(/class="ovt ([^"]*)" style="/g, `class="ovt grow $1" style="animation-delay:${220 - animAt}ms;`);
   ovEl.innerHTML = html;
   // keep every tag inside the chart area and below the legend chips
   const box = ovEl.getBoundingClientRect(), legendBottom = legendEl.getBoundingClientRect().bottom + 4;
@@ -1508,9 +1602,9 @@ function draw(cs, r){
     // position box, like a broker's long/short tool
     const l0 = p.type === 'active' ? n-1-p.ago : n, l1 = Math.max(l0, n) + 10;
     const T3 = p.tps[2];
-    rects.push({l0, l1, p0:p.entry, p1:T3, cls:'tpbox' + fade});
+    rects.push({l0, l1, p0:p.entry, p1:T3, cls:'tpbox' + fade, from: up ? 'from-b' : 'from-t'});
     if (S.p.tpMulti) for (const v of [p.tps[0], p.tps[1]]) rects.push({l0, l1, p0:v, p1:v, cls:'tpline' + fade});
-    rects.push({l0, l1, p0:p.entry, p1:p.sl, cls:'slbox' + fade});
+    rects.push({l0, l1, p0:p.entry, p1:p.sl, cls:'slbox' + fade, from: up ? 'from-t' : 'from-b'});
     rects.push({l0:Math.max(0, n-60), l1:l0, p0:p.entry, p1:p.entry, cls:'entryln' + fade});
     const rr = Math.abs(T3 - p.entry) / Math.abs(p.entry - p.sl);
     const narrow = innerWidth < 700;
@@ -1599,7 +1693,9 @@ function setMView(v){
 // Compact trade plan under the chart; tapping it opens the Setup section
 function renderMini(r){
   const p = r.plan, el = $('fcMini');
-  $('setupDot').hidden = !(p && p.htfOk);
+  const dot = $('setupDot'), was = !dot.hidden;
+  dot.hidden = !(p && p.htfOk);
+  if (!dot.hidden && !was){ dot.classList.remove('pulse'); void dot.offsetWidth; dot.classList.add('pulse'); }
   if (!p){ el.innerHTML = '<span class="muted">No setup forming on this chart</span><span class="go">›</span>'; return; }
   const up = p.dir === 1, rr = Math.abs((p.tps ? p.tps[2] : p.tp) - p.entry) / Math.abs(p.entry - p.sl);
   const state = p.type === 'active' ? (p.hits ? `TP${p.hits} ✓` : 'RUNNING') : p.type === 'limit' ? 'LIMIT' : 'IF BREAK';
@@ -1877,11 +1973,17 @@ async function scanCurrent(){
   const btn = $('scanBtn'); btn.disabled = true; btn.classList.add('busy'); btn.querySelector('span').textContent = 'Scanning…';
   $('curSym').textContent = $('fcSym').textContent = `${sym} · ${S.tf}`;
   setStatus(`Scanning ${sym}…`);
+  scanFx.start(`Downloading ${sym} candles…`);
+  let scanOk = false;
   try {
     const {cs, r} = await scanSymbol(S.source, sym, S.tf, S.htf);
     if (cs.length < 50) throw new Error('Not enough candles returned.');
-    if (S.p.mtfOn){ r.mtf = mtfCached(S.source, sym); if (!r.mtf && S.p.alertMtf) r.mtf = await mtfFor(S.source, sym); }
+    if (S.p.mtfOn){ r.mtf = mtfCached(S.source, sym); if (!r.mtf && S.p.alertMtf){ scanFx.stage('Checking 1D → 5m…'); r.mtf = await mtfFor(S.source, sym); } }
+    scanFx.stage('Drawing the setup…');
     draw(cs, r);
+    if (OV) OV.animStart = performance.now();                        // lay the trade box down once, after the lamp passes
+    scanOk = true;
+    scanFx.finish(true, chart.timeScale().logicalToCoordinate(cs.length - 1));
     $('fc').innerHTML = forecastHtml(r);
     renderMini(r);
     $('cur').innerHTML = `
@@ -1920,6 +2022,7 @@ async function scanCurrent(){
   } catch(e){
     const msg = friendlyError(e, sym);
     setStatus('Scan failed');
+    scanFx.finish(false);
     clearChart();
     if (/reach|blocked|Failed to fetch/i.test(msg)){ srcHealth[S.source] = false; renderSrcBtn(); }
     $('cur').innerHTML = `<div>Error</div><div style="color:var(--down)">${esc(msg)}</div>`;
