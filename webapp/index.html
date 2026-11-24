@@ -578,6 +578,39 @@ function pumpQueue(src, gapMs){
   q.timer = setTimeout(() => { q.timer = null; q.last = Date.now(); const r = q.items.shift(); r(); pumpQueue(src, gapMs); }, wait);
 }
 const cache = new Map(); // key -> {at, data}
+// Binance market data is served from several hosts; some are blocked in some countries / networks.
+// Try them in turn and remember the one that answers.
+const BIN_HOSTS = ['https://data-api.binance.vision', 'https://api.binance.com', 'https://api1.binance.com', 'https://api3.binance.com', 'https://api.binance.us'];
+let binHost = null;
+try { binHost = localStorage.getItem('smc-binhost'); } catch(e){}
+async function binanceFetch(path){
+  const order = binHost ? [binHost].concat(BIN_HOSTS.filter(h => h !== binHost)) : BIN_HOSTS.slice();
+  let lastErr = null;
+  for (const host of order){
+    try {
+      const r = await fetch(host + path);
+      if (r.status === 451 || r.status === 403){ lastErr = new Error(`Binance ${r.status}: blocked in this region`); continue; }
+      if (host !== binHost){ binHost = host; try { localStorage.setItem('smc-binhost', host); } catch(e){} }
+      return r;
+    } catch(e){ lastErr = e; }
+  }
+  throw lastErr || new Error('Failed to fetch');
+}
+// BTCUSDT -> BTC/USD (for Twelve Data)
+function cryptoToTd(sym){
+  const m = String(sym).toUpperCase().match(/^([A-Z0-9]{2,10}?)(USDT|USDC|BUSD|USD)$/);
+  return m ? `${m[1]}/USD` : null;
+}
+// Which data source a typed symbol belongs to
+function sourceFor(sym){
+  const s = String(sym).trim().toUpperCase();
+  if (!s) return null;
+  if (s.includes('/')) return 'twelvedata';                       // EUR/USD, XAU/USD, BTC/USD
+  if (/^DEMO/.test(s)) return 'demo';
+  if (/(USDT|USDC|BUSD|FDUSD|BTC|ETH|BNB)$/.test(s) && s.length > 5) return 'binance';
+  if (/^(XAU|XAG|EUR|GBP|USD|AUD|NZD|CAD|CHF|JPY)[A-Z]{3}$/.test(s)) return 'twelvedata';   // EURUSD, XAUUSD typed without the slash
+  return null;
+}
 
 async function getCandles(source, symbol, tfKey, limit=1000){
   const tf = tfOf(tfKey), key = [source, symbol, tfKey, limit].join('|');
@@ -601,8 +634,14 @@ async function getCandles(source, symbol, tfKey, limit=1000){
     while (data.length < limit){
       const want = Math.min(1000, limit - data.length);
       await throttle('binance', 150, symbol === chartScanSym);
-      const url = `https://data-api.binance.vision/api/v3/klines?symbol=${encodeURIComponent(symbol.toUpperCase())}&interval=${tf.bin}&limit=${want}` + (end ? `&endTime=${end}` : '');
-      const r = await fetch(url);
+      const path = `/api/v3/klines?symbol=${encodeURIComponent(symbol.toUpperCase())}&interval=${tf.bin}&limit=${want}` + (end ? `&endTime=${end}` : '');
+      let r;
+      try { r = await binanceFetch(path); }
+      catch(e){
+        // every Binance server is blocked from here: use Twelve Data's crypto prices instead, when a key is available
+        if (tdKey() && !data.length){ const alt = cryptoToTd(symbol); if (alt) return getCandles('twelvedata', alt, tfKey, limit); }
+        throw e;
+      }
       if (!r.ok) throw new Error(`Binance ${r.status}: ${(await r.text()).slice(0,120)}`);
       const batch = (await r.json()).map(k => ({t:+k[0], o:+k[1], h:+k[2], l:+k[3], c:+k[4]}));
       if (!batch.length) break;
@@ -1328,6 +1367,14 @@ fitBtn.addEventListener('pointerdown', e => e.stopPropagation());
 })();
 
 let LAST_DRAW = null, LAST_VIEW = '';
+function clearChart(){
+  candles.setData([]); candles.setMarkers([]); emaLine.setData([]);
+  extraSeries.forEach(s => chart.removeSeries(s)); extraSeries = [];
+  priceLines.forEach(l => candles.removePriceLine(l)); priceLines = [];
+  OV = null; planRange = null; LAST_DRAW = null; LAST_VIEW = ''; drawOverlay();
+  $('fc').innerHTML = '<div>Setup</div><div class="muted">No data for this symbol.</div>';
+  $('fcMini').innerHTML = '<span class="muted">No data for this symbol</span>';
+}
 function draw(cs, r){
   LAST_DRAW = {cs, r};
   const viewKey = [S.source, curSymbol(), S.tf].join('|');
@@ -1743,7 +1790,9 @@ function renderHeader(){
 function friendlyError(e, sym){
   const m = String(e && e.message || e);
   if (/Failed to fetch|NetworkError|Load failed/i.test(m))
-    return `Could not reach the ${S.source === 'binance' ? 'Binance' : 'Twelve Data'} server. Check your internet connection${S.source === 'binance' ? ', or switch to Twelve Data (Binance data is blocked in some countries)' : ''}.`;
+    return S.source === 'binance'
+      ? `Binance can't be reached from your network (it is blocked in some countries). Add a Twelve Data key in Settings and crypto will load from Twelve Data instead, or type the pair as ${cryptoToTd(sym) || 'BTC/USD'}.`
+      : 'Could not reach the Twelve Data server. Check your internet connection.';
   if (/Binance 400/.test(m)) return `Binance doesn't know the symbol "${sym}". Use the format BTCUSDT.`;
   if (/run out of API credits|credits/i.test(m)) return 'Twelve Data limit reached (8 a minute / 800 a day on the free plan). Wait a minute, or scan fewer pairs.';
   if (/symbol.*(not found|invalid)|invalid.*symbol|\*\*symbol\*\*/i.test(m)) return `Twelve Data doesn't know "${sym}". Use the format EUR/USD or XAU/USD.`;
@@ -1798,6 +1847,7 @@ async function scanCurrent(){
   } catch(e){
     const msg = friendlyError(e, sym);
     setStatus('Scan failed');
+    clearChart();
     $('cur').innerHTML = `<div>Error</div><div style="color:var(--down)">${esc(msg)}</div>`;
     legendEl.innerHTML = `<span class="chip" style="color:var(--down);max-width:min(560px,80vw);white-space:normal">${esc(msg)}</span>`;
     toast(msg);
@@ -1921,7 +1971,17 @@ function setAuto(){
 
 // events
 $('source').onchange = e => { S.source = e.target.value; save(); renderHeader(); scanCurrent(); if ($('tabTv').classList.contains('on')) showTv(); };
-$('symbol').onchange = e => { S.symbol[S.source] = e.target.value.trim(); save(); scanCurrent(); if ($('tabTv').classList.contains('on')) showTv(); };
+$('symbol').onchange = e => {
+  let sym = e.target.value.trim();
+  const want = sourceFor(sym);
+  if (want && want !== S.source){
+    // the symbol belongs to another data source: switch to it instead of asking the wrong server
+    if (want === 'twelvedata' && !sym.includes('/')) sym = sym.toUpperCase().replace(/^([A-Z]{3})([A-Z]{3})$/, '$1/$2');
+    S.source = want; S.symbol[want] = sym; save(); renderHeader();
+    toast(`${sym}: switched to ${want === 'twelvedata' ? 'Forex / Gold (Twelve Data)' : want === 'binance' ? 'Crypto (Binance)' : 'Demo data'}${want === 'twelvedata' && !tdKey() ? '. Add your Twelve Data key in Settings.' : '.'}`);
+  } else { S.symbol[S.source] = sym; save(); }
+  scanCurrent(); if ($('tabTv').classList.contains('on')) showTv();
+};
 $('tfs').onclick = e => { const tf = e.target.dataset.tf; if (!tf) return; S.tf = tf; save(); renderHeader(); scanCurrent(); if ($('tabTv').classList.contains('on')) showTv(); };
 $('strategy').onchange = e => { S.p.strategy = e.target.value; save(); for (const k in wlResults) delete wlResults[k]; renderWatchlist(); scanCurrent(); };
 $('htf').onchange = e => { S.htf = e.target.value; save(); renderWatchlist(); scanCurrent(); };
