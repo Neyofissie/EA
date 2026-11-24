@@ -175,3 +175,8 @@ Fast mode produces more setups. Compare both on your pairs with the Backtest or 
 - If a key leaks, create a new one and rebuild `config.js`.
 - The MT5 login and MetaApi token are never put in this file.
 - `config.js` is git-ignored, so it is never committed. `config.example.js` shows the format.
+
+## Indices: US30, NAS100, SPX500
+- **Typing a broker index name** switches to Twelve Data automatically: **US30** (also DJ30, WS30), **NAS100** (US100, USTEC) or **SPX500** (US500).
+- **Data source:** the app first asks Twelve Data for the index itself (DJI / NDX / SPX). If your plan doesn't include it, it uses the ETF that tracks it (DIA / QQQ / SPY) and says so in the status line. The ETF moves the same way but only trades in US market hours. The choice is remembered.
+- **Elsewhere:** the TradingView tab shows the real index. MT5 orders use your broker's name (US30 + your suffix, or the name map in Broker settings). News and correlation treat these indices as USD-linked.

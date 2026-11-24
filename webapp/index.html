@@ -264,7 +264,7 @@ button.mini{padding:3px 8px;font-size:12px;min-height:0}
   <h1>SMC + S/R Scanner</h1>
   <div class="symbox">
     <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-    <input id="symbol" list="symlist" size="11" title="Symbol" aria-label="Symbol" autocomplete="off" autocapitalize="characters" spellcheck="false" enterkeyhint="search">
+    <input id="symbol" list="symlist" size="11" title="Symbol, e.g. BTCUSDT, EUR/USD, XAU/USD, US30" placeholder="BTCUSDT, XAU/USD, US30" aria-label="Symbol" autocomplete="off" autocapitalize="characters" spellcheck="false" enterkeyhint="search">
   </div>
   <datalist id="symlist"></datalist>
   <button class="primary iconbtn" id="scanBtn" aria-label="Scan chart">
@@ -574,7 +574,7 @@ const DEFAULTS = {
   p:{mtfOn:true, alertMtf:false, mtfWatchTD:false, alertBasis:'rr', alertRR:2, alertOn:true, alertMin:50, alertMinN:8, alertGateTrades:true, smcMode:'fast', intSwing:2, htfMode:'ema', htfPd:false, adxMin:0, volLo:0, volHi:0, ltfConfirm:false, news:true, newsBefore:30, newsAfter:30, corr:true, dailyLossR:3, maxOpenBt:3, tpMulti:true, tp1R:1, tp3Mode:'liq', tp3R:3, split:'50/30/20', be:true, view:'clean', poi:'level', choch:false, dispAtr:1.0, session:'both', minConf:0, req:[], strategy:'smc', srTouches:2, zoneW:0.5, srLook:300, tpMode:'zone', minRR:1.5, srTrend:'trend', swing:5, trend:'EMA + Structure', ema:200, htfEma:50, useHtf:true, tol:0.25, maxRetest:20, rej:true, slAtr:0.5, rr:2, fresh:5, closed:true},
   wl:{
     binance:['BTCUSDT','ETHUSDT','SOLUSDT','BNBUSDT','XRPUSDT','ADAUSDT','DOGEUSDT','AVAXUSDT'],
-    twelvedata:['EUR/USD','GBP/USD','USD/JPY','AUD/USD','USD/CAD','GBP/JPY','EUR/JPY','XAU/USD'],
+    twelvedata:['EUR/USD','GBP/USD','USD/JPY','AUD/USD','USD/CAD','GBP/JPY','EUR/JPY','XAU/USD','US30','NAS100'],
     demo:['DEMO-1','DEMO-2','DEMO-3','DEMO-4','DEMO-5','DEMO-6'],
   },
 };
@@ -642,12 +642,24 @@ function cryptoToTd(sym){
   const m = String(sym).toUpperCase().match(/^([A-Z0-9]{2,10}?)(USDT|USDC|BUSD|USD)$/);
   return m ? `${m[1]}/USD` : null;
 }
+// Stock indices under the names brokers use. Twelve Data names, tried in order: the index itself, then the ETF that tracks it
+// (the ETF moves the same way but only trades in US market hours; some Twelve Data plans don't include the index).
+const IDX = {};
+for (const [names, td, tv, title] of [
+  [['US30', 'DJ30', 'WS30', 'DOW', 'DJI'], ['DJI', 'DIA'], 'TVC:DJI', 'Dow Jones 30'],
+  [['NAS100', 'US100', 'USTEC', 'NDX', 'NASDAQ'], ['NDX', 'QQQ'], 'NASDAQ:NDX', 'Nasdaq 100'],
+  [['SPX500', 'US500', 'SP500', 'SPX'], ['SPX', 'SPY'], 'SP:SPX', 'S&P 500'],
+]) for (const n of names) IDX[n] = {td, tv, title};
+const idxOf = sym => IDX[String(sym).trim().toUpperCase().replace(/[^A-Z0-9]/g, '')] || null;
+const IDX_USED = {};
+try { Object.assign(IDX_USED, JSON.parse(localStorage.getItem('smc-idx') || '{}')); } catch(e){}
 // Which data source a typed symbol belongs to
 function sourceFor(sym){
   const s = String(sym).trim().toUpperCase();
   if (!s) return null;
   if (s.includes('/')) return 'twelvedata';                       // EUR/USD, XAU/USD, BTC/USD
   if (/^DEMO/.test(s)) return 'demo';
+  if (idxOf(s)) return 'twelvedata';                               // US30, NAS100, SPX500 …
   if (/(USDT|USDC|BUSD|FDUSD|BTC|ETH|BNB)$/.test(s) && s.length > 5) return 'binance';
   if (/^(XAU|XAG|EUR|GBP|USD|AUD|NZD|CAD|CHF|JPY)[A-Z]{3}$/.test(s)) return 'twelvedata';   // EURUSD, XAUUSD typed without the slash
   return null;
@@ -691,9 +703,20 @@ async function getCandles(source, symbol, tfKey, limit=1000){
     }
   } else if (source === 'twelvedata'){
     if (!tdKey()) throw new Error('Add your free Twelve Data API key in Settings to scan forex/gold.');
-    await throttle('twelvedata', 8000, symbol === chartScanSym); // free plan: 8 requests / minute
-    const url = `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(symbol)}&interval=${tf.td}&outputsize=${Math.min(limit,5000)}&timezone=UTC&order=ASC&apikey=${encodeURIComponent(tdKey())}`;
-    const j = await (await fetch(url)).json();
+    const ix = idxOf(symbol), up = String(symbol).toUpperCase();
+    // an index: start with the name that worked last time, then the others
+    const names = ix ? (IDX_USED[up] ? [IDX_USED[up]].concat(ix.td.filter(x => x !== IDX_USED[up])) : ix.td) : [symbol];
+    let j = null;
+    for (let k = 0; k < names.length; k++){
+      await throttle('twelvedata', 8000, symbol === chartScanSym); // free plan: 8 requests / minute
+      const url = `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(names[k])}&interval=${tf.td}&outputsize=${Math.min(limit,5000)}&timezone=UTC&order=ASC&apikey=${encodeURIComponent(tdKey())}`;
+      j = await (await fetch(url)).json();
+      if (j.status !== 'error' && j.values){
+        if (ix && IDX_USED[up] !== names[k]){ IDX_USED[up] = names[k]; try { localStorage.setItem('smc-idx', JSON.stringify(IDX_USED)); } catch(e){} }
+        break;
+      }
+      if (/credits|apikey|api key/i.test(j.message || '')) break;       // rate limit or bad key: trying other names won't help
+    }
     if (j.status === 'error' || !j.values) throw new Error(`Twelve Data: ${j.message || 'no data'}`);
     data = j.values.map(v => ({t:Date.parse(v.datetime.replace(' ','T') + (v.datetime.length>10?'Z':'T00:00:00Z')), o:+v.open, h:+v.high, l:+v.low, c:+v.close}));
   } else {
@@ -1516,6 +1539,7 @@ function draw(cs, r){
 
 // ======================= TradingView widget =======================
 function tvSymbol(source, sym){
+  if (idxOf(sym)) return idxOf(sym).tv;
   if (source === 'binance') return 'BINANCE:' + sym.toUpperCase();
   if (source === 'twelvedata'){
     const s = sym.replace('/', '').toUpperCase();
@@ -1608,6 +1632,7 @@ function tile(label, value, cls=''){ return `<div class="tile"><span>${label}</s
 
 // Currencies a symbol is long/short of, for the correlation guard
 function legs(sym){
+  if (idxOf(sym)) return [String(sym).toUpperCase().replace(/[^A-Z0-9]/g, ''), 'USD'];   // US indices move with USD news
   const s = String(sym).toUpperCase().replace(/[^A-Z0-9/]/g, '');
   if (s.includes('/')) return s.split('/').slice(0, 2);
   const q = s.match(/(USDT|USDC|BUSD|USD|EUR|GBP|JPY|BTC)$/);
@@ -1821,7 +1846,8 @@ function renderHeader(){
   if ($('srcLabel')) renderSrcBtn();
   $('strategy').value = S.p.strategy;
   $('symbol').value = curSymbol();
-  $('symlist').innerHTML = (S.wl[S.source]||[]).map(s => `<option value="${esc(s)}">`).join('');
+  const sugg = [...new Set((S.wl[S.source]||[]).concat(S.source === 'twelvedata' ? ['XAU/USD', 'US30', 'NAS100', 'SPX500', 'BTC/USD'] : []))];
+  $('symlist').innerHTML = sugg.map(s => `<option value="${esc(s)}">`).join('');
   $('tfs').innerHTML = TFS.map(t => `<button data-tf="${t.k}" class="${t.k===S.tf?'on':''}">${t.k}</button>`).join('');
   $('htf').innerHTML = TFS.map(t => `<option ${t.k===S.htf?'selected':''}>${t.k}</option>`).join('');
   $('auto').value = S.auto;
@@ -1839,13 +1865,14 @@ function friendlyError(e, sym){
   if (/run out of API credits|credits/i.test(m)) return 'Twelve Data limit reached (8 a minute / 800 a day on the free plan). Wait a minute, or scan fewer pairs.';
   if (/symbol.*(not found|invalid)|invalid.*symbol|\*\*symbol\*\*/i.test(m)) return `Twelve Data doesn't know "${sym}". Use the format EUR/USD or XAU/USD.`;
   if (/apikey|api key/i.test(m)) return 'Twelve Data rejected the API key. Check it in Settings.';
+  if (/plan|upgrade|pro|grow/i.test(m) && idxOf(sym)) return `Your Twelve Data plan doesn't include ${idxOf(sym).title} data. Try again later, or check the plan on twelvedata.com.`;
   return m;
 }
-let scanning = false;
+let scanning = false, rescanQueued = false;
 async function scanCurrent(){
   const sym = curSymbol().trim();
   if (!sym){ toast('Type a symbol first, e.g. BTCUSDT or EUR/USD.'); return; }
-  if (scanning) return;
+  if (scanning){ rescanQueued = true; return; }        // a new symbol / timeframe picked mid-scan: run again when this one ends
   scanning = true; chartScanSym = sym;
   const btn = $('scanBtn'); btn.disabled = true; btn.classList.add('busy'); btn.querySelector('span').textContent = 'Scanning…';
   $('curSym').textContent = $('fcSym').textContent = `${sym} · ${S.tf}`;
@@ -1881,6 +1908,9 @@ async function scanCurrent(){
     checkNew(S.source, sym, S.tf, r);
     setStatus(`Updated ${new Date().toLocaleTimeString()} · ${cs.length} candles`);
     srcHealth[S.source] = true; renderSrcBtn();
+    const ixs = idxOf(sym);
+    if (ixs && IDX_USED[sym.toUpperCase()] && IDX_USED[sym.toUpperCase()] !== ixs.td[0])
+      setStatus(`Updated ${new Date().toLocaleTimeString()} · ${ixs.title} via ${IDX_USED[sym.toUpperCase()]} (ETF, US market hours only)`);
     if (S.p.mtfOn && !r.mtf) setTimeout(() => mtfFor(S.source, sym).then(m => {   // after the scan, behind it in the queue
       r.mtf = m;
       if (curSymbol().trim() !== sym) return;
@@ -1897,6 +1927,7 @@ async function scanCurrent(){
     toast(msg);
   } finally {
     scanning = false; chartScanSym = null; btn.disabled = false; btn.classList.remove('busy'); btn.querySelector('span').textContent = 'Scan chart';
+    if (rescanQueued){ rescanQueued = false; setTimeout(scanCurrent, 0); }
   }
 }
 
