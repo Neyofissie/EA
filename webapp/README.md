@@ -187,3 +187,13 @@ Fast mode produces more setups. Compare both on your pairs with the Backtest or 
 - **When the scan ends:** the lamp slows to a stop at the latest candle and fades. The trade box is then laid down from the entry line (about 0.3 s), and the Setup tab dot pulses once if a setup is ready. Fast scans get one short pass.
 - **When a scan fails:** the lamp stops where it is and turns red (*Scan stopped*) before the error shows.
 - **Reduce Motion:** if it is turned on in the phone or computer settings, there is no lamp or draw-in, only the label.
+
+## Strategy 3: Volume profile (value-area retest in a strong trend)
+Choose **Volume profile** (or **All three**) in the strategy selector.
+1. **Profile:** built from the last *N* candles (default 120), leaving out the newest 10 so it shows where value *was*. The **POC** is the busiest price, and the **value area (VAH–VAL)** holds 70% of the volume.
+2. **Strong-trend gate:** for a long, price > EMA50 > EMA200 with EMA50 rising, **ADX ≥ 25**, and the HTF agrees. Mirror for shorts.
+3. **Acceptance:** at least 3 of the previous 5 closes are beyond the value area (above VAH for longs).
+4. **Entry:** price pulls back to the VAH and a bullish candle closes back above it. The stop goes below the VAH plus the ATR buffer. TP1/TP2/TP3, alerts, Telegram, MT5, backtest and optimizer work as for the other strategies.
+5. **Chart:** the profile histogram on the right (value area blue, POC orange), POC / VAH / VAL lines, and a *VP · volume / time · ADX* chip.
+
+Forex and gold have no central volume, so for them the profile counts **time at each price** (Market Profile). Crypto, stocks and ETFs use real volume.

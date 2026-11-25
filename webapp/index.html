@@ -86,6 +86,9 @@ dialog{overflow-x:hidden}
 .ovr.lab-left span{left:6px;right:auto}
 .ovr span{position:absolute;right:6px;top:50%;transform:translateY(-50%);font-size:12px;font-weight:700;color:#e2e8f0;
   background:rgba(13,16,23,.82);padding:2px 8px;border-radius:5px;white-space:nowrap}
+.vpb{position:absolute;background:rgba(148,163,184,.16);border-radius:2px 0 0 2px}
+.vpb.va{background:rgba(96,165,250,.26)}
+.vpb.poc{background:rgba(245,158,11,.55)}
 .ovr.tpbox{background:rgba(34,197,94,.20);border:1px solid rgba(34,197,94,.65)}
 .ovr.slbox{background:rgba(239,68,68,.20);border:1px solid rgba(239,68,68,.65)}
 .ovr.ob-d{background:rgba(168,85,247,.16);border-top:1px dashed rgba(192,132,252,.8);border-bottom:1px dashed rgba(192,132,252,.8)}
@@ -304,7 +307,9 @@ button.mini{padding:3px 8px;font-size:12px;min-height:0}
     <select id="strategy" title="Strategy" aria-label="Strategy">
       <option value="smc">SMC: BOS + retest</option>
       <option value="sr">Support &amp; Resistance</option>
-      <option value="both">Both strategies</option>
+      <option value="vp">Volume profile (trend)</option>
+      <option value="both">SMC + S/R</option>
+      <option value="all">All three</option>
     </select>
     <select id="source" title="Data source" aria-label="Data source" hidden>
       <option value="binance">Crypto (Binance)</option>
@@ -438,7 +443,7 @@ button.mini{padding:3px 8px;font-size:12px;min-height:0}
     <label class="full">Twelve Data API key (free at twelvedata.com — needed for forex/gold)
       <input id="s_tdkey" type="password" autocomplete="off"></label>
     <div class="full muted" id="cfgState" style="font-size:12px"></div>
-    <label>Strategy<select id="s_strategy"><option value="smc">SMC: BOS + retest</option><option value="sr">Support &amp; Resistance</option><option value="both">Both strategies</option></select></label>
+    <label>Strategy<select id="s_strategy"><option value="smc">SMC: BOS + retest</option><option value="sr">Support &amp; Resistance</option><option value="vp">Volume profile (strong trend)</option><option value="both">SMC + S/R</option><option value="all">All three</option></select></label>
     <label>Swing length (bars each side)<input id="s_swing" type="number" min="1"></label>
     <div class="full" style="border-top:1px solid var(--line);padding-top:10px;color:var(--text);font-weight:600">Build keys into the app</div>
     <div class="full muted" style="font-size:12px">Saves you typing keys on every phone and computer. Press the button, put the downloaded <b>config.js</b> into the app folder next to index.html, and upload the folder to Netlify again.
@@ -482,6 +487,14 @@ button.mini{padding:3px 8px;font-size:12px;min-height:0}
         <label style="flex-direction:row;align-items:center;color:var(--text)"><input type="checkbox" id="rq_Discount"> Premium / discount</label>
         <label style="flex-direction:row;align-items:center;color:var(--text)"><input type="checkbox" id="rq_Killzone"> Kill zone</label>
       </div></div>
+    <div class="full" style="border-top:1px solid var(--line);padding-top:10px;color:var(--text);font-weight:600">Volume profile</div>
+    <label>Profile length (candles)<input id="s_vplook" type="number" min="30" max="1000"></label>
+    <label>Leave out the latest N candles<input id="s_vplag" type="number" min="0" max="100"></label>
+    <label>Price rows (bins)<input id="s_vpbins" type="number" min="12" max="200"></label>
+    <label>Value area (%)<input id="s_vpva" type="number" min="50" max="90"></label>
+    <label>Strong trend: min ADX<input id="s_vpadx" type="number" min="0" max="60"></label>
+    <label>Show the profile on the chart<select id="s_vpshow"><option value="1">Yes</option><option value="0">No</option></select></label>
+    <div class="full muted" style="font-size:12px">Forex and gold have no real volume, so the profile there counts time at each price (Market Profile). Crypto and stocks use real volume.</div>
     <div class="full" style="border-top:1px solid var(--line);padding-top:10px;color:var(--text);font-weight:600">Support &amp; resistance</div>
     <label>S/R: min touches for a zone<input id="s_srtouch" type="number" min="1"></label>
     <label>S/R: zone width (× ATR)<input id="s_zonew" type="number" step="0.05" min="0.05"></label>
@@ -597,7 +610,7 @@ const DEFAULTS = {
   tf:'15m', htf:'4h', auto:'0', tdkey:'', binPref:'auto',
   tg:{token:'', chat:'', auto:false, setups:false, footer:'Not financial advice. Trade at your own risk.'},
   broker:{token:'', remember:true, accountId:'', auto:false, risk:0.5, maxOpen:3, dayLossPct:3, day:null, magic:240521, suffix:'', map:'', managed:[]},
-  p:{mtfOn:true, alertMtf:false, mtfWatchTD:false, alertBasis:'rr', alertRR:2, alertOn:true, alertMin:50, alertMinN:8, alertGateTrades:true, smcMode:'fast', intSwing:2, htfMode:'ema', htfPd:false, adxMin:0, volLo:0, volHi:0, ltfConfirm:false, news:true, newsBefore:30, newsAfter:30, corr:true, dailyLossR:3, maxOpenBt:3, tpMulti:true, tp1R:1, tp3Mode:'liq', tp3R:3, split:'50/30/20', be:true, view:'clean', poi:'level', choch:false, dispAtr:1.0, session:'both', minConf:0, req:[], strategy:'smc', srTouches:2, zoneW:0.5, srLook:300, tpMode:'zone', minRR:1.5, srTrend:'trend', swing:5, trend:'EMA + Structure', ema:200, htfEma:50, useHtf:true, tol:0.25, maxRetest:20, rej:true, slAtr:0.5, rr:2, fresh:5, closed:true},
+  p:{vpLook:120, vpLag:10, vpBins:48, vpVA:70, vpAdx:25, vpShow:true, mtfOn:true, alertMtf:false, mtfWatchTD:false, alertBasis:'rr', alertRR:2, alertOn:true, alertMin:50, alertMinN:8, alertGateTrades:true, smcMode:'fast', intSwing:2, htfMode:'ema', htfPd:false, adxMin:0, volLo:0, volHi:0, ltfConfirm:false, news:true, newsBefore:30, newsAfter:30, corr:true, dailyLossR:3, maxOpenBt:3, tpMulti:true, tp1R:1, tp3Mode:'liq', tp3R:3, split:'50/30/20', be:true, view:'clean', poi:'level', choch:false, dispAtr:1.0, session:'both', minConf:0, req:[], strategy:'smc', srTouches:2, zoneW:0.5, srLook:300, tpMode:'zone', minRR:1.5, srTrend:'trend', swing:5, trend:'EMA + Structure', ema:200, htfEma:50, useHtf:true, tol:0.25, maxRetest:20, rej:true, slAtr:0.5, rr:2, fresh:5, closed:true},
   wl:{
     binance:['BTCUSDT','ETHUSDT','SOLUSDT','BNBUSDT','XRPUSDT','ADAUSDT','DOGEUSDT','AVAXUSDT'],
     twelvedata:['EUR/USD','GBP/USD','USD/JPY','AUD/USD','USD/CAD','GBP/JPY','EUR/JPY','XAU/USD','US30','NAS100'],
@@ -722,7 +735,7 @@ async function getCandles(source, symbol, tfKey, limit=1000){
         throw e;
       }
       if (!r.ok) throw new Error(`Binance ${r.status}: ${(await r.text()).slice(0,120)}`);
-      const batch = (await r.json()).map(k => ({t:+k[0], o:+k[1], h:+k[2], l:+k[3], c:+k[4]}));
+      const batch = (await r.json()).map(k => ({t:+k[0], o:+k[1], h:+k[2], l:+k[3], c:+k[4], v:+k[5] || 0}));
       if (!batch.length) break;
       data = batch.concat(data); end = batch[0].t - 1;
       if (batch.length < want) break;
@@ -744,7 +757,7 @@ async function getCandles(source, symbol, tfKey, limit=1000){
       if (/credits|apikey|api key/i.test(j.message || '')) break;       // rate limit or bad key: trying other names won't help
     }
     if (j.status === 'error' || !j.values) throw new Error(`Twelve Data: ${j.message || 'no data'}`);
-    data = j.values.map(v => ({t:Date.parse(v.datetime.replace(' ','T') + (v.datetime.length>10?'Z':'T00:00:00Z')), o:+v.open, h:+v.high, l:+v.low, c:+v.close}));
+    data = j.values.map(v => ({t:Date.parse(v.datetime.replace(' ','T') + (v.datetime.length>10?'Z':'T00:00:00Z')), o:+v.open, h:+v.high, l:+v.low, c:+v.close, v:+v.volume || 0}));
   } else {
     data = demoCandles(symbol, tf, limit);
   }
@@ -764,7 +777,8 @@ function demoCandles(symbol, tf, n){
     const o = p, vol = p*0.004;
     const c = o + drift*p + (rnd()-0.5)*vol*2;
     const h = Math.max(o,c) + rnd()*vol, l = Math.min(o,c) - rnd()*vol;
-    out.push({t:end - i*tf.ms, o, h, l, c}); p = c;
+    // volume from a separate formula, so the demo prices stay exactly the same as before volume existed
+    out.push({t:end - i*tf.ms, o, h, l, c, v: Math.round(800 + ((i*7919 + seed % 997) % 900) + Math.abs(c - o)/vol*1500)}); p = c;
   }
   return out;
 }
@@ -986,8 +1000,9 @@ function analyze(cs, p, htfBias, ctx = {}){
     if (!xHB && lastH !== null && c.c > lastH){ xHB = true; legDir = 1; }
     if (!xLB && lastL !== null && c.c < lastL){ xLB = true; legDir = -1; }
   }
-  const useSmc = p.strategy !== 'sr', useSr = p.strategy !== 'smc';
+  const useSmc = ['smc', 'both', 'all'].includes(p.strategy), useSr = ['sr', 'both', 'all'].includes(p.strategy), useVp = ['vp', 'all'].includes(p.strategy);
   const sr = useSr ? srScan(cs, p, atr, trendArr, htfBias) : {zones:[], signals:[], plan:null};
+  const vp = useVp ? vpScan(cs, p, atr, htfBias) : {signals:[], plan:null, profile:null};
   // ----- quality filters -----
   const needAdx = p.adxMin > 0, needVol = p.volLo > 0 || p.volHi > 0;
   const adx = needAdx ? adxArr(cs) : null;
@@ -1042,7 +1057,7 @@ function analyze(cs, p, htfBias, ctx = {}){
     }
     return true;
   };
-  const good = (useSmc ? signals : []).concat(sr.signals)
+  const good = (useSmc ? signals : []).concat(sr.signals, vp.signals)
     .filter(passes).sort((a,b) => a.i - b.i);
   for (const s of good) s.rWin = Math.abs(s.tp - s.entry) / Math.abs(s.entry - s.sl);
   const last = good[good.length-1] || null;
@@ -1143,6 +1158,8 @@ function analyze(cs, p, htfBias, ctx = {}){
   }
   else if (sr.plan)
     plan = sr.plan;
+  else if (vp.plan)
+    plan = vp.plan;
   else if (!useSmc) plan = null;
   else if (trendDir === 1 && !(Li ? iHB : hBroken) && (Li ? iH : lastH) !== null && (Li ? iH : lastH) > close)
     plan = mk(1, 'watch', Li ? iH : lastH, {trigger: Li ? iH : lastH});
@@ -1158,7 +1175,7 @@ function analyze(cs, p, htfBias, ctx = {}){
   if (plan && plan.hits === undefined) plan.hits = 0;
 
   return {
-    ema, bos: useSmc ? bos : [], zones: sr.zones, pivots, sweeps, signals:good, trendDir, state: useSmc && pend ? pend.dir : 0,
+    vp: vp.profile, ema, bos: useSmc ? bos : [], zones: sr.zones, pivots, sweeps, signals:good, trendDir, state: useSmc && pend ? pend.dir : 0,
     level: useSmc && pend ? pend.lvl : null, htf: htfNow,
     last, lastAgo: last ? n-1-last.i : null, price: close, plan, stats, loAt, hiAt,
     ltfStart: p.ltfConfirm ? ltfStart : null,
@@ -1250,6 +1267,78 @@ function srScan(cs, p, atr, trendArr, htfBias){
   return {zones: out, signals, plan};
 }
 
+// ---------- Volume profile: value-area retest in a strong trend ----------
+// Profile of the W candles that ended `lag` candles ago (where value WAS). Volume is spread over each candle's range.
+// Without volume data (forex / gold) every candle counts the same: a time-at-price (Market Profile) histogram.
+function volumeProfile(cs, from, to, bins, vaPct, useVol){
+  let lo = Infinity, hi = -Infinity;
+  for (let k = from; k < to; k++){ if (cs[k].l < lo) lo = cs[k].l; if (cs[k].h > hi) hi = cs[k].h; }
+  if (!(hi > lo)) return null;
+  const step = (hi - lo)/bins, vol = new Array(bins).fill(0);
+  for (let k = from; k < to; k++){
+    const c = cs[k], w = useVol ? (c.v || 0) : 1;
+    const a = Math.max(0, Math.min(bins-1, Math.floor((c.l - lo)/step))), b = Math.max(0, Math.min(bins-1, Math.floor((c.h - lo)/step)));
+    const share = w/(b - a + 1);
+    for (let j = a; j <= b; j++) vol[j] += share;
+  }
+  let poc = 0, total = 0;
+  for (let j = 0; j < bins; j++){ total += vol[j]; if (vol[j] > vol[poc]) poc = j; }
+  // value area: grow out from the POC, always taking the bigger neighbour, until vaPct of the volume is inside
+  let up = poc, dn = poc, inside = vol[poc];
+  while (inside < total*vaPct && (up < bins-1 || dn > 0)){
+    const nu = up < bins-1 ? vol[up+1] : -1, nd = dn > 0 ? vol[dn-1] : -1;
+    if (nu >= nd){ up++; inside += nu; } else { dn--; inside += nd; }
+  }
+  return {lo, hi, step, vol, poc: lo + (poc + 0.5)*step, vah: lo + (up + 1)*step, val: lo + dn*step, pocBin: poc, upBin: up, dnBin: dn, from, to};
+}
+function vpScan(cs, p, atr, htfBias){
+  const n = cs.length, W = p.vpLook, lag = p.vpLag, bins = p.vpBins, va = p.vpVA/100, L = p.swing;
+  const close = cs.map(c => c.c), e50 = emaArr(close, 50), e200 = emaArr(close, 200), adx = adxArr(cs);
+  const useVol = cs.slice(-W).some(c => c.v > 0);
+  const signals = [];
+  let lastSig = -1e9;
+  const strong = (i, d) => {
+    const c = cs[i].c;
+    const emaOk = d === 1 ? c > e50[i] && e50[i] > e200[i] && e50[i] > e50[i-5] : c < e50[i] && e50[i] < e200[i] && e50[i] < e50[i-5];
+    return emaOk && adx[i] >= p.vpAdx && (!p.useHtf || htfBias[i] === d);
+  };
+  // price "accepted" outside value: at least 3 of the previous 5 closes beyond the edge
+  const accepted = (i, d, edge) => { let k = 0; for (let j = i-5; j < i; j++) if (d === 1 ? cs[j].c > edge : cs[j].c < edge) k++; return k >= 3; };
+  for (let i = Math.max(W + lag, 210); i < n; i++){
+    const pr = volumeProfile(cs, i - lag - W, i - lag, bins, va, useVol);
+    if (!pr) continue;
+    const c = cs[i], tol = atr[i]*p.tol;
+    if (i - lastSig <= 2*L) continue;
+    if (strong(i, 1) && accepted(i, 1, pr.vah) && c.l <= pr.vah + tol && c.c > pr.vah && c.c > c.o){
+      const sl = Math.min(c.l, pr.vah) - p.slAtr*atr[i];
+      signals.push({i, t:c.t, dir:1, entry:c.c, sl, tp:c.c + p.rr*(c.c - sl), level:pr.vah, htf:htfBias[i], kind:'VP retest'});
+      lastSig = i;
+    } else if (strong(i, -1) && accepted(i, -1, pr.val) && c.h >= pr.val - tol && c.c < pr.val && c.c < c.o){
+      const sl = Math.max(c.h, pr.val) + p.slAtr*atr[i];
+      signals.push({i, t:c.t, dir:-1, entry:c.c, sl, tp:c.c - p.rr*(sl - c.c), level:pr.val, htf:htfBias[i], kind:'VP retest'});
+      lastSig = i;
+    }
+  }
+  // the profile the NEXT candle will be judged against, and the forecast from it
+  const prof = n > W + lag ? volumeProfile(cs, n - lag - W, n - lag, bins, va, useVol) : null;
+  let plan = null;
+  if (prof && n > 210){
+    const i = n-1, close = cs[i].c, tol = atr[i]*p.tol, buf = atr[i]*p.slAtr;
+    for (const d of [1, -1]){
+      if (!strong(i, d)) continue;
+      const edge = d === 1 ? prof.vah : prof.val;
+      const outside = d === 1 ? close > edge : close < edge;
+      let runStart = i; while (runStart > 0 && (d === 1 ? cs[runStart-1].c > edge : cs[runStart-1].c < edge)) runStart--;
+      const sl = edge - d*(tol + buf);
+      plan = {dir:d, type: outside && accepted(i + 1, d, edge) ? 'limit' : 'watch', kind:'vp', entry:edge, sl,
+        tp: edge + d*p.rr*Math.abs(edge - sl), tol, trigger: edge, invalid: prof.poc, adx: adx[i],
+        poc: prof.poc, vah: prof.vah, val: prof.val, bosT: outside ? cs[runStart].t : 0, htfOk:true};
+      break;
+    }
+  }
+  return {signals, plan, profile: prof ? {...prof, mode: useVol ? 'volume' : 'time', adx: adx[n-1]} : null};
+}
+
 async function loadAndAnalyze(source, symbol, tfKey, htfKey, n, closedOnly){
   const p = S.p, tf = tfOf(tfKey), htf = tfOf(htfKey);
   let cs = await getCandles(source, symbol, tfKey, n);
@@ -1291,7 +1380,7 @@ function statusHtml(r){
   const side = p.dir===1 ? 'Buy' : 'Sell';
   const cls = !p.htfOk ? 'neu' : p.type==='active' ? (p.dir===1?'up':'down') : p.type==='limit' ? 'warn' : 'neu';
   const txt = p.type==='active' ? `${side.toUpperCase()} active · ${p.ago} bars`
-    : p.type==='limit' ? `${side} limit ${fmt(p.entry)}${p.kind==='sr' ? ' (S/R)' : ''}` : `Watch break ${fmt(p.trigger)}`;
+    : p.type==='limit' ? `${side} limit ${fmt(p.entry)}${p.kind==='sr' ? ' (S/R)' : p.kind==='vp' ? ' (VP)' : ''}` : p.kind==='vp' ? `VP: watch ${fmt(p.trigger)}` : `Watch break ${fmt(p.trigger)}`;
   return `<span class="pill ${cls}">${txt}${p.htfOk ? '' : ' · vs HTF'}</span>`;
 }
 const pct = x => x==null ? '–' : Math.round(x*100) + '%';
@@ -1312,11 +1401,15 @@ function forecastHtml(r){
   const label = p.type==='active' ? `Trade running · ${p.kind || 'SMC'}`
     : p.kind==='smc' && p.type==='limit' && p.poi !== 'Level' ? `Limit order at ${p.poi==='OB' ? 'order block' : 'FVG'}`
     : p.kind==='sr' ? `Limit order at ${up ? 'support' : 'resistance'}`
+    : p.kind==='vp' ? (p.type === 'limit' ? `Limit order at the value area ${up ? 'high' : 'low'}` : 'Strong trend · waiting for acceptance')
     : p.type==='limit' ? 'Limit order · waiting for retest' : 'Possible · waiting for break';
   let cond;
   if (p.type==='active') cond = p.hits
     ? `Signal fired ${p.ago} candles ago. TP${p.hits} hit${S.p.be ? ', stop moved to entry (break-even)' : ''}. The rest is still running.`
     : `Signal fired ${p.ago} candles ago. Neither SL nor TP has been hit yet.`;
+  else if (p.kind==='vp') cond = p.type === 'limit'
+    ? `Strong ${up?'uptrend':'downtrend'} (ADX ${Math.round(p.adx)}) and price is accepted ${up?'above':'below'} the value area (VAH ${fmt(p.vah)}, POC ${fmt(p.poc)}, VAL ${fmt(p.val)}). ${up?'Buy':'Sell'} the pull-back to the value area ${up?'high':'low'} ${fmt(p.entry)} when a ${up?'bullish':'bearish'} candle closes back ${up?'above':'below'} it. The idea fails if price closes back to the POC.`
+    : `Strong ${up?'uptrend':'downtrend'} (ADX ${Math.round(p.adx)}). Waiting for price to be accepted ${up?'above':'below'} the value area ${up?'high':'low'} ${fmt(p.entry)} (3 of 5 closes), then for a pull-back to it.`;
   else if (p.kind==='sr') cond = `${up?'Support':'Resistance'} zone ${fmt(p.zb)} – ${fmt(p.zt)}, touched ${p.touches} times. ${up?'Buy':'Sell'} when price ${up?'dips':'rises'} into the zone and a ${up?'bullish':'bearish'} candle closes back ${up?'above':'below'} ${fmt(p.entry)}. Skip it if a candle closes ${up?'below':'above'} ${fmt(p.invalid)}.`;
   else if (p.type==='limit' && p.poi && p.poi !== 'Level') cond = `Structure broke. Enter when price pulls back into the ${p.poi==='OB' ? 'order block' : 'fair value gap'} (${fmt(p.entry)} side first) and a ${up?'bullish':'bearish'} candle closes back ${up?'above':'below'} its middle. Cancel on a close ${up?'below':'above'} ${fmt(p.invalid)} or after ${p.barsLeft} more candles.`;
   else if (p.type==='limit') cond = `Structure broke at ${fmt(p.entry)}. Enter when price pulls back into ${fmt(p.entry - p.tol)} – ${fmt(p.entry + p.tol)}${S.p.poi==='any' ? ' (or deeper, in the fair value gap or order block)' : ''} and a ${up?'bullish':'bearish'} candle closes back ${up?'above':'below'} it. Cancel on a close ${up?'below':'above'} ${fmt(p.invalid)} or after ${p.barsLeft} more candles.`;
@@ -1460,6 +1553,15 @@ function drawOverlay(){
   let html = '';
   // the trade box is laid down once after a scan; redraws during that moment continue the same animation
   const animAt = OV.animStart ? performance.now() - OV.animStart : Infinity;
+  if (OV.hist){                                                       // profile bars grow leftwards from the right edge
+    const hp = OV.hist, max = Math.max(...hp.vol), maxW = Math.min(150, W*0.28);
+    for (let j = 0; j < hp.vol.length; j++){
+      const ya = Y(hp.lo + (j+1)*hp.step), yb = Y(hp.lo + j*hp.step);
+      if (ya === null || yb === null || !hp.vol[j]) continue;
+      const w = Math.max(1, hp.vol[j]/max*maxW), cls = j === hp.pocBin ? 'poc' : j >= hp.dnBin && j <= hp.upBin ? 'va' : '';
+      html += `<div class="vpb ${cls}" style="left:${W - w}px;top:${Math.min(ya, yb) + 0.5}px;width:${w}px;height:${Math.max(1, Math.abs(yb - ya) - 1)}px"></div>`;
+    }
+  }
   for (const r of OV.rects){
     const x0 = X(r.l0), x1 = X(r.l1), y0 = Y(r.p0), y1 = Y(r.p1);
     if ([x0, x1, y0, y1].some(v => v === null)) continue;
@@ -1554,7 +1656,8 @@ function draw(cs, r){
   const chg = (px - ref.c)/ref.c*100;
   legendEl.innerHTML = `<span class="chip">${esc(curSymbol())}</span><span class="chip">${S.tf.toUpperCase()}</span>
     <span class="chip px">${fmt(px)} <span style="color:${chg >= 0 ? 'var(--up)' : 'var(--down)'};font-size:13px">${chg >= 0 ? '▲' : '▼'} ${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%</span></span>
-    ${S.p.mtfOn ? `<span class="chip mtfchip" id="mtfChip">${mtfHtml(r.mtf || mtfCached(S.source, curSymbol()))}</span>` : ''}`;
+    ${S.p.mtfOn ? `<span class="chip mtfchip" id="mtfChip">${mtfHtml(r.mtf || mtfCached(S.source, curSymbol()))}</span>` : ''}
+    ${r.vp && S.p.vpShow ? `<span class="chip mtfchip" title="${r.vp.mode === 'volume' ? 'Built from traded volume' : 'This market has no volume data: time spent at each price'}">VP · ${r.vp.mode === 'volume' ? 'volume' : 'time'} · ADX ${Math.round(r.vp.adx)}</span>` : ''}`;
 
   const markers = [];
   // BOS / CHoCH levels
@@ -1582,7 +1685,7 @@ function draw(cs, r){
     }
   }
   for (const s of r.signals.slice(annot ? 0 : -4)) markers.push({time:s.t/1000, position:s.dir===1?'belowBar':'aboveBar', color:s.dir===1?'#22c55e':'#ef4444',
-    shape:s.dir===1?'arrowUp':'arrowDown', text:(s.kind==='SMC' ? '' : s.kind==='SMC CHoCH' ? 'CHoCH ' : 'S/R ') + (s.dir===1?'BUY':'SELL')});
+    shape:s.dir===1?'arrowUp':'arrowDown', text:(s.kind==='SMC' ? '' : s.kind==='SMC CHoCH' ? 'CHoCH ' : s.kind==='VP retest' ? 'VP ' : 'S/R ') + (s.dir===1?'BUY':'SELL')});
   markers.sort((a,b) => a.time-b.time);
 
   // S/R zones: nearest 3 above and 3 below price
@@ -1593,6 +1696,14 @@ function draw(cs, r){
     rects.push({l0:Math.max(0, z.first), l1:END, p0:z.zb, p1:z.zt, cls: sup ? 'sup' : 'res', label:`${sup ? 'Support' : 'Resistance'} ×${z.touches}`});
   }
 
+  // volume profile: histogram on the right edge + POC / VAH / VAL lines
+  const vpx = r.vp && S.p.vpShow ? r.vp : null;
+  if (vpx){
+    priceLines.push(candles.createPriceLine({price:vpx.poc, color:'#f59e0b', lineWidth:1, lineStyle:0, axisLabelVisible:true, title:'POC'}));
+    const same = v => r.plan && Math.abs(r.plan.entry - v) < 1e-9;          // the entry line already marks it
+    if (!same(vpx.vah)) priceLines.push(candles.createPriceLine({price:vpx.vah, color:'#60a5fa', lineWidth:1, lineStyle:2, axisLabelVisible:true, title:'VAH'}));
+    if (!same(vpx.val)) priceLines.push(candles.createPriceLine({price:vpx.val, color:'#60a5fa', lineWidth:1, lineStyle:2, axisLabelVisible:true, title:'VAL'}));
+  }
   const p = r.plan;
   planRange = null;
   if (p){
@@ -1626,7 +1737,7 @@ function draw(cs, r){
   }
   candles.setData(cs.map(c => ({time:c.t/1000, open:c.o, high:c.h, low:c.l, close:c.c})).concat(future));
   candles.setMarkers(markers);
-  OV = {rects, tags};
+  OV = {rects, tags, hist: vpx};
   if (freshView) chart.timeScale().setVisibleLogicalRange(innerWidth < 700 ? {from: n - 30, to: n + 15} : {from: n - 90, to: n + 14});
   queueOverlay();
 }
@@ -1865,7 +1976,7 @@ async function runBacktest(){
       ${tile('Buys won', st.longs.n ? `${st.longs.w}/${st.longs.n}` : '–')}
       ${tile('Sells won', st.shorts.n ? `${st.shorts.w}/${st.shorts.n}` : '–')}
       ${tile('Avg time in trade', st.avgBars.toFixed(0) + ' candles')}
-      ${['SMC','S/R bounce','S/R flip'].map(k => { const x = all.filter(t => t.kind === k); if (!x.length || p.strategy === 'smc') return '';
+      ${['SMC','SMC CHoCH','S/R bounce','S/R flip','VP retest'].map(k => { const x = all.filter(t => t.kind === k); if (!x.length || p.strategy === 'smc') return '';
         const net = x.reduce((a,t) => a + t.R, 0); return tile(`${k}: won ${x.filter(t => t.outcome==='win').length}/${x.length}`, sgn(net) + 'R', net >= 0 ? 'good' : 'bad'); }).join('')}
     </div>
     <p class="muted" style="margin:0">${p.tpMulti ? `Exits: ${p.split} at TP1 (${p.tp1R}R) / TP2 (strategy target) / TP3 (${p.tp3Mode === 'liq' ? 'next liquidity, else ' + p.tp3R + 'R' : p.tp3R + 'R'})${p.be ? ', stop to break-even after TP1' : ''}. A trade counts as a win once TP1 is hit.` : p.strategy==='sr' && p.tpMode==='zone' ? 'Targets are the next S/R level, so reward varies per trade.' : `At 1:${p.rr} R:R with ${cost}R costs you need a win rate above ${pct(be)} to make money.`}
@@ -1928,7 +2039,7 @@ async function runBacktest(){
 
 // ======================= UI wiring =======================
 const curSymbol = () => S.symbol[S.source] || '';
-const STRAT = {smc:'SMC BOS + retest', sr:'Support & Resistance', both:'SMC + S/R'};
+const STRAT = {smc:'SMC BOS + retest', sr:'Support & Resistance', vp:'Volume profile', both:'SMC + S/R', all:'SMC + S/R + VP'};
 function setStatus(t){ $('status').textContent = t; }
 function toast(msg){
   const box = $('toast'), d = document.createElement('div'); d.textContent = msg; d.setAttribute('role', 'status');
@@ -2249,7 +2360,8 @@ $('bt_tables').onclick = e => {
   e.target.textContent = 'Applied'; toast('Settings applied. Run the backtest again to see full results.'); scanCurrent();
 };
 
-const F = [['s_mtfon','mtfOn',v=>v==='1'],['s_alertmtf','alertMtf',v=>v==='1'],['s_mtfwatch','mtfWatchTD',v=>v==='1'],['s_alertbasis','alertBasis',String],['s_alertrr','alertRR',Number],['s_alerton','alertOn',v=>v==='1'],['s_alertmin','alertMin',Number],['s_alertminn','alertMinN',Number],['s_alertgate','alertGateTrades',v=>v==='1'],
+const F = [['s_vplook','vpLook',Number],['s_vplag','vpLag',Number],['s_vpbins','vpBins',Number],['s_vpva','vpVA',Number],['s_vpadx','vpAdx',Number],['s_vpshow','vpShow',v=>v==='1'],
+  ['s_mtfon','mtfOn',v=>v==='1'],['s_alertmtf','alertMtf',v=>v==='1'],['s_mtfwatch','mtfWatchTD',v=>v==='1'],['s_alertbasis','alertBasis',String],['s_alertrr','alertRR',Number],['s_alerton','alertOn',v=>v==='1'],['s_alertmin','alertMin',Number],['s_alertminn','alertMinN',Number],['s_alertgate','alertGateTrades',v=>v==='1'],
   ['s_smcmode','smcMode',String],['s_intswing','intSwing',Number],['s_htfmode','htfMode',String],['s_htfpd','htfPd',v=>v==='1'],['s_adx','adxMin',Number],['s_ltf','ltfConfirm',v=>v==='1'],
   ['s_vollo','volLo',Number],['s_volhi','volHi',Number],['s_news','news',v=>v==='1'],['s_newsb','newsBefore',Number],['s_newsa','newsAfter',Number],
   ['s_corr','corr',v=>v==='1'],['s_maxopenbt','maxOpenBt',Number],['s_dayloss','dailyLossR',Number],
@@ -2353,7 +2465,7 @@ function shareButtons(what){
 }
 // Normalised trade description from a forecast plan or from a fired signal
 function fromPlan(p){
-  return {dir:p.dir, entry:p.entry, sl:p.sl, tps:p.tps || [p.tp], kind: p.kind === 'sr' ? 'Support & resistance' : p.choch ? 'SMC CHoCH' : 'SMC BOS + retest',
+  return {dir:p.dir, entry:p.entry, sl:p.sl, tps:p.tps || [p.tp], kind: p.kind === 'sr' ? 'Support & resistance' : p.kind === 'vp' ? 'Volume profile retest' : p.choch ? 'SMC CHoCH' : 'SMC BOS + retest',
     state: p.type === 'active' ? 'Running' : p.type === 'limit' ? 'Limit order (wait for the retest)' : 'Pending: only if structure breaks',
     trigger: p.trigger, gates: p.gates, trail: p.tps && p.tps.trail, hits: p.hits || 0};
 }
