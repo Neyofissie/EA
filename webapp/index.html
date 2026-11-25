@@ -131,7 +131,11 @@ dialog{overflow-x:hidden}
 .rail{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .symbox{position:relative;display:flex;align-items:center}
 .symbox .ico{position:absolute;left:9px;width:16px;height:16px;color:var(--muted);pointer-events:none}
-#symbol{padding-left:30px}
+#symbol{padding-left:30px;padding-right:38px}
+.favbtn{position:absolute;right:4px;top:50%;transform:translateY(-50%);width:32px;height:32px;min-height:0;padding:0;border:0;background:none;
+  font-size:19px;line-height:1;color:var(--muted);border-radius:999px}
+.favbtn.on{color:#fbbf24}
+.favbtn:active{transform:translateY(-50%) scale(.88)}
 button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 button:disabled{opacity:.7;cursor:progress}
 #scanBtn.busy .ico{animation:spin .9s linear infinite}
@@ -179,6 +183,14 @@ button:disabled{opacity:.7;cursor:progress}
   background:rgba(13,16,23,.88);border:1px solid var(--accent);color:#93c5fd}
 .fcact{grid-column:1/-1;display:flex;gap:8px;flex-wrap:wrap;padding-bottom:4px;border-bottom:1px solid var(--line);margin-bottom:2px;padding-bottom:12px}
 .fcact button{flex:1 1 auto}
+.bellbtn{font-weight:600}
+.bellbtn.on{background:#3a2c0b;border-color:#f59e0b;color:#fbbf24}
+.wslist .ws{display:grid;grid-template-columns:1fr auto;gap:2px 10px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--line)}
+.wslist .ws b{font-size:14px}
+.wslist .ws .sub{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}
+.wslist .ws .st{justify-self:end}
+.wslist .ws button{grid-row:1/3;grid-column:2;width:32px;height:32px;min-height:0;padding:0;border-radius:999px}
+.wslist .ws .open{cursor:pointer}
 button.mini{padding:3px 8px;font-size:12px;min-height:0}
 .tgbtn{background:#229ED9;border-color:#229ED9;color:#fff;font-weight:600}
 .dhead{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
@@ -235,7 +247,7 @@ button.mini{padding:3px 8px;font-size:12px;min-height:0}
   body[data-mview] aside > .card{display:none}
   body[data-mview="setup"] .chartwrap, body[data-mview="scanner"] .chartwrap, body[data-mview="account"] .chartwrap{display:none}
   body[data-mview="setup"] aside > .c-forecast, body[data-mview="setup"] aside > .c-current, body[data-mview="setup"] aside > .c-hist,
-  body[data-mview="scanner"] aside > .c-watch, body[data-mview="account"] aside > .c-account, body[data-mview="account"] aside > .c-broker{display:block}
+  body[data-mview="scanner"] aside > .c-watch, body[data-mview="scanner"] aside > .c-watched, body[data-mview="account"] aside > .c-account, body[data-mview="account"] aside > .c-broker{display:block}
   body[data-mview="backtest"] .tabs, body[data-mview="backtest"] .fcmini{display:none}
   body[data-mview="chart"] .tabs .status{flex:1}
   aside{gap:0;overflow:visible;padding-bottom:8px}
@@ -294,6 +306,7 @@ button.mini{padding:3px 8px;font-size:12px;min-height:0}
   <div class="symbox">
     <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
     <input id="symbol" list="symlist" size="11" title="Symbol, e.g. BTCUSDT, EUR/USD, XAU/USD, US30" placeholder="BTCUSDT, XAU/USD, US30" aria-label="Symbol" autocomplete="off" autocapitalize="characters" spellcheck="false" enterkeyhint="search">
+    <button type="button" id="favBtn" class="favbtn" aria-pressed="false" aria-label="Add to watchlist" title="Add to watchlist">☆</button>
   </div>
   <datalist id="symlist"></datalist>
   <button class="primary iconbtn" id="scanBtn" aria-label="Scan chart">
@@ -386,6 +399,10 @@ button.mini{padding:3px 8px;font-size:12px;min-height:0}
     <div class="card c-current">
       <h2>Current chart <span class="r" id="curSym"></span></h2>
       <div class="kv" id="cur"><div>Status</div><div class="muted">Press “Scan chart”</div></div>
+    </div>
+    <div class="card c-watched">
+      <h2>Watched setups <span class="r muted" id="wsCount"></span></h2>
+      <div id="wsList" class="wslist"><p class="muted" style="margin:0;padding:12px;font-size:13px">Tap 🔔 on a setup in the Forecast to get notified the moment it reaches its entry and when it triggers.</p></div>
     </div>
     <div class="card c-watch">
       <h2>Watchlist scanner <span class="r"><button id="scanAllBtn">Scan all</button></span></h2>
@@ -608,6 +625,7 @@ const CONF_LABEL = {OB:'Order block', FVG:'Fair value gap', Sweep:'Liquidity swe
 const DEFAULTS = {
   source:'binance', symbol:{binance:'BTCUSDT', twelvedata:'EUR/USD', demo:'DEMO-1'},
   tf:'15m', htf:'4h', auto:'0', tdkey:'', binPref:'auto',
+  watched:[],
   tg:{token:'', chat:'', auto:false, setups:false, footer:'Not financial advice. Trade at your own risk.'},
   broker:{token:'', remember:true, accountId:'', auto:false, risk:0.5, maxOpen:3, dayLossPct:3, day:null, magic:240521, suffix:'', map:'', managed:[]},
   p:{vpLook:120, vpLag:10, vpBins:48, vpVA:70, vpAdx:25, vpShow:true, mtfOn:true, alertMtf:false, mtfWatchTD:false, alertBasis:'rr', alertRR:2, alertOn:true, alertMin:50, alertMinN:8, alertGateTrades:true, smcMode:'fast', intSwing:2, htfMode:'ema', htfPd:false, adxMin:0, volLo:0, volHi:0, ltfConfirm:false, news:true, newsBefore:30, newsAfter:30, corr:true, dailyLossR:3, maxOpenBt:3, tpMulti:true, tp1R:1, tp3Mode:'liq', tp3R:3, split:'50/30/20', be:true, view:'clean', poi:'level', choch:false, dispAtr:1.0, session:'both', minConf:0, req:[], strategy:'smc', srTouches:2, zoneW:0.5, srLook:300, tpMode:'zone', minRR:1.5, srTrend:'trend', swing:5, trend:'EMA + Structure', ema:200, htfEma:50, useHtf:true, tol:0.25, maxRetest:20, rej:true, slAtr:0.5, rr:2, fresh:5, closed:true},
@@ -2051,6 +2069,7 @@ function toast(msg){
 function renderHeader(){
   $('source').value = S.source;
   if ($('srcLabel')) renderSrcBtn();
+  if ($('favBtn')) renderFav();
   $('strategy').value = S.p.strategy;
   $('symbol').value = curSymbol();
   const sugg = [...new Set((S.wl[S.source]||[]).concat(S.source === 'twelvedata' ? ['XAU/USD', 'US30', 'NAS100', 'SPX500', 'BTC/USD'] : []))];
@@ -2083,6 +2102,7 @@ async function scanCurrent(){
   scanning = true; chartScanSym = sym;
   const btn = $('scanBtn'); btn.disabled = true; btn.classList.add('busy'); btn.querySelector('span').textContent = 'Scanning…';
   $('curSym').textContent = $('fcSym').textContent = `${sym} · ${S.tf}`;
+  renderFav();
   setStatus(`Scanning ${sym}…`);
   scanFx.start(`Downloading ${sym} candles…`);
   let scanOk = false;
@@ -2091,6 +2111,7 @@ async function scanCurrent(){
     if (cs.length < 50) throw new Error('Not enough candles returned.');
     if (S.p.mtfOn){ r.mtf = mtfCached(S.source, sym); if (!r.mtf && S.p.alertMtf){ scanFx.stage('Checking 1D → 5m…'); r.mtf = await mtfFor(S.source, sym); } }
     scanFx.stage('Drawing the setup…');
+    SHARE.sym = sym; SHARE.tf = S.tf; SHARE.plan = r.plan; SHARE.stats = r.stats;   // before the forecast so its 🔔 / Copy act on this chart
     draw(cs, r);
     if (OV) OV.animStart = performance.now();                        // lay the trade box down once, after the lamp passes
     scanOk = true;
@@ -2455,11 +2476,139 @@ function mtfHtml(m, compact){
 const mtfText = m => m ? m.list.map(e => `${e.tf.toUpperCase()} ${e.dir === 1 ? '▲' : e.dir === -1 ? '▼' : '–'}`).join(' ') + (m.aligned ? ` (all ${m.aligned === 1 ? 'up' : 'down'})` : ' (mixed)') : '';
 const mtfWatchOn = () => S.p.mtfOn && (S.source !== 'twelvedata' || S.p.mtfWatchTD);
 
+// ======================= Watched setups & favourites =======================
+// A watched setup is checked on its own timer: a live price check for "at entry", and a fresh scan after every candle close
+// to see whether the confirmation candle fired the signal ("triggered") or the setup fell apart ("cancelled").
+const WATCH_TICK = 15000;
+const watchKey = (src, sym, tf, p) => [src, String(sym).toUpperCase(), tf, p.dir, p.kind].join('|');
+function findWatch(sym, tf, p){
+  if (!p) return null;
+  const k = watchKey(S.source, sym, tf, p);
+  return (S.watched || []).find(w => w.key === k && (w.status === 'waiting' || w.status === 'at entry')) || null;
+}
+function toggleWatch(){
+  const p = SHARE.plan; if (!p || p.type === 'active') return;
+  const w = findWatch(SHARE.sym, SHARE.tf, p);
+  if (w){ S.watched = S.watched.filter(x => x !== w); toast(`Stopped watching ${w.sym} ${w.tf}.`); }
+  else {
+    const tfMs = tfOf(SHARE.tf).ms;
+    S.watched.push({key: watchKey(S.source, SHARE.sym, SHARE.tf, p), source:S.source, sym:SHARE.sym, tf:SHARE.tf, htf:S.htf, dir:p.dir, kind:p.kind,
+      type:p.type, entry:p.entry, sl:p.sl, tps:p.tps, tol:p.tol || 0, trigger:p.trigger ?? null, created:Date.now(),
+      nextCheck: Math.floor(Date.now()/tfMs)*tfMs + tfMs + 20e3, status:'waiting', price:null, priceAt:0});
+    toast(`Watching ${SHARE.sym} ${SHARE.tf.toUpperCase()}: you'll be notified at the entry zone and when it triggers.`);
+    if ('Notification' in window && Notification.permission === 'default') enableNotifications();
+  }
+  save(); renderWatched();
+  if (LAST_DRAW) $('fc').innerHTML = forecastHtml(LAST_DRAW.r);
+}
+function renderWatched(){
+  const list = S.watched || [], live = list.filter(w => w.status === 'waiting' || w.status === 'at entry');
+  $('wsCount').textContent = live.length ? `${live.length} active` : '';
+  if (!list.length){ $('wsList').innerHTML = '<p class="muted" style="margin:0;padding:12px;font-size:13px">Tap 🔔 on a setup in the Forecast to get notified the moment it reaches its entry and when it triggers.</p>'; return; }
+  const pill = w => w.status === 'triggered' ? `<span class="pill ${w.dir === 1 ? 'up' : 'down'}">Triggered ✓</span>`
+    : w.status === 'at entry' ? '<span class="pill warn">At entry</span>' : w.status === 'cancelled' ? '<span class="pill neu">Cancelled</span>' : '<span class="pill neu">Waiting</span>';
+  $('wsList').innerHTML = list.slice().reverse().map(w => {
+    const dist = w.price ? ` · now ${fmt(w.price)} (${(Math.abs(w.price - w.entry)/w.entry*100).toFixed(2)}% away)` : '';
+    return `<div class="ws"><div class="open" data-open="${esc(w.key)}"><b>${w.dir === 1 ? '▲ BUY' : '▼ SELL'} ${esc(w.sym)}</b> <span class="muted">${w.tf.toUpperCase()}</span> ${pill(w)}</div>
+      <button type="button" data-unwatch="${esc(w.key)}|${w.created}" aria-label="Remove">✕</button>
+      <div class="sub">${w.status === 'triggered' ? 'Entered' : w.type === 'watch' ? 'If it breaks' : 'Entry'} ${fmt(w.entry)} · SL ${fmt(w.sl)} · TP ${fmt(w.tps ? w.tps[Math.min(1, w.tps.length - 1)] : w.entry)}${dist}</div></div>`;
+  }).join('');
+}
+function watchAlert(w, title, body){
+  toast(body); beep(); notify(title, body);
+  if (S.tg.auto && tgToken() && tgChat()) tgSend([title, body], true);
+}
+async function livePrice(w){
+  if (w.source === 'binance'){ const r = await binanceFetch(`/api/v3/ticker/price?symbol=${encodeURIComponent(w.sym.toUpperCase())}`); return +(await r.json()).price; }
+  if (w.source === 'twelvedata'){
+    if (!tdKey()) return null;
+    const ix = idxOf(w.sym), name = ix ? (IDX_USED[w.sym.toUpperCase()] || ix.td[0]) : w.sym;
+    await throttle('twelvedata', 8000, false);
+    const j = await (await fetch(`https://api.twelvedata.com/price?symbol=${encodeURIComponent(name)}&apikey=${encodeURIComponent(tdKey())}`)).json();
+    return j && j.price ? +j.price : null;
+  }
+  const cs = await getCandles('demo', w.sym, w.tf, 300); return cs[cs.length - 1].c;
+}
+let watchBusy = false;
+async function watchTick(){
+  if (watchBusy) return; watchBusy = true;
+  try {
+    for (const w of (S.watched || [])){
+      if (w.status !== 'waiting' && w.status !== 'at entry') continue;
+      const now = Date.now();
+      // 1. live price: "at entry" heads-up (Twelve Data once a minute to respect the free plan)
+      if (now - w.priceAt >= (w.source === 'twelvedata' ? 60000 : WATCH_TICK - 500)){
+        try {
+          const px = await livePrice(w);
+          w.priceAt = now;
+          if (px){
+            w.price = px;
+            const zone = Math.max(w.tol, Math.abs(w.entry)*0.0005);
+            const atEntry = w.type === 'watch' ? (w.dir === 1 ? px >= w.entry : px <= w.entry) : (w.dir === 1 ? px <= w.entry + zone : px >= w.entry - zone);
+            if (atEntry && w.status === 'waiting'){
+              w.status = 'at entry';
+              watchAlert(w, `⏳ ${w.sym} ${w.tf.toUpperCase()} at entry`, w.type === 'watch'
+                ? `${w.sym}: price is breaking ${fmt(w.entry)}. Watching for the setup to form.`
+                : `${w.sym}: price reached the ${w.dir === 1 ? 'buy' : 'sell'} zone ${fmt(w.entry)}. Waiting for the confirmation candle to close.`);
+            }
+          }
+        } catch(e){}
+      }
+      // 2. after each candle close: did the signal fire, or did the setup fall apart?
+      if (now >= w.nextCheck){
+        const tfMs = tfOf(w.tf).ms;
+        w.nextCheck = Math.floor(now/tfMs)*tfMs + tfMs + 20e3;
+        try {
+          const {r} = await loadAndAnalyze(w.source, w.sym, w.tf, w.htf, Math.max(1000, S.p.ema*3), true);
+          const sig = r.signals.slice().reverse().find(x => x.dir === w.dir && x.t + tfMs >= w.created);
+          if (sig){
+            w.status = 'triggered'; w.entry = sig.entry; w.sl = sig.sl; w.tps = sig.tps || [sig.tp];
+            const msg = `${w.sym} ${w.tf}: ${w.dir === 1 ? 'BUY' : 'SELL'} @ ${fmt(sig.entry)} · SL ${fmt(sig.sl)} · ${S.p.tpMulti ? tpList(sig.tps) : 'TP ' + fmt(sig.tp)}`;
+            watchAlert(w, `${w.dir === 1 ? '🟢 BUY' : '🔴 SELL'} TRIGGERED · ${w.sym} ${w.tf.toUpperCase()}`, msg);
+            if (S.broker.auto && BROKER.conn && w.source === S.source && !newsBlock(w.sym)) brokerExecute(w.sym, sig, false);
+          } else if (!r.plan || r.plan.dir !== w.dir || r.plan.type === 'active'){
+            w.status = 'cancelled';
+            toast(`${w.sym} ${w.tf}: the setup was cancelled (structure changed). Removed from the watch.`);
+          } else { w.entry = r.plan.entry; w.sl = r.plan.sl; w.tps = r.plan.tps || [r.plan.tp]; w.type = r.plan.type; }
+        } catch(e){}
+      }
+    }
+    save(); renderWatched();
+  } finally { watchBusy = false; }
+}
+setInterval(watchTick, WATCH_TICK);
+$('wsList').addEventListener('click', e => {
+  const x = e.target.closest('[data-unwatch]');
+  if (x){ const [k, t] = [x.dataset.unwatch.slice(0, x.dataset.unwatch.lastIndexOf('|')), +x.dataset.unwatch.split('|').pop()];
+    S.watched = S.watched.filter(w => !(w.key === k && w.created === t)); save(); renderWatched();
+    if (LAST_DRAW) $('fc').innerHTML = forecastHtml(LAST_DRAW.r); return; }
+  const o = e.target.closest('[data-open]');
+  if (o){ const w = S.watched.find(v => v.key === o.dataset.open); if (!w) return;
+    if (w.source !== S.source){ S.source = w.source; }
+    S.symbol[S.source] = w.sym; S.tf = w.tf; save(); renderHeader(); if (isPhone()) setMView('chart'); scanCurrent(); }
+});
+// favourites: the star adds / removes the current symbol from this source's watchlist
+function renderFav(){
+  const sym = curSymbol().trim().toUpperCase(), on = (S.wl[S.source] || []).some(x => x.toUpperCase() === sym);
+  const b = $('favBtn'); b.textContent = on ? '★' : '☆'; b.classList.toggle('on', on);
+  b.setAttribute('aria-pressed', on); b.title = b.ariaLabel = on ? 'Remove from watchlist' : 'Add to watchlist';
+}
+$('favBtn').onclick = () => {
+  const sym = curSymbol().trim(); if (!sym) return;
+  const list = S.wl[S.source] || (S.wl[S.source] = []);
+  const i = list.findIndex(x => x.toUpperCase() === sym.toUpperCase());
+  if (i >= 0){ list.splice(i, 1); toast(`${sym} removed from the watchlist.`); } else { list.push(sym); toast(`${sym} added to the watchlist ★`); }
+  save(); renderFav(); renderWatchlist();
+};
+
 // ======================= Share / Telegram =======================
 const SHARE = {sym:'', tf:'', plan:null, signals:[], stats:null};
 const canShare = () => !!(navigator.share);
 function shareButtons(what){
-  return `<button type="button" data-share="copy" data-what="${what}">Copy signal</button>
+  const w = what === 'plan' && SHARE.plan && SHARE.plan.type !== 'active' ? findWatch(SHARE.sym, SHARE.tf, SHARE.plan) : null;
+  const bell = what === 'plan' && SHARE.plan && SHARE.plan.type !== 'active'
+    ? `<button type="button" class="bellbtn${w ? ' on' : ''}" data-bell="1" aria-pressed="${!!w}">${w ? '🔔 Watching · tap to stop' : '🔔 Alert me when it triggers'}</button>` : '';
+  return `${bell}<button type="button" data-share="copy" data-what="${what}">Copy signal</button>
     ${canShare() ? `<button type="button" data-share="native" data-what="${what}">Share…</button>` : ''}
     ${tgToken() && tgChat() ? `<button type="button" class="tgbtn" data-share="tg" data-what="${what}">Send to Telegram</button>` : ''}`;
 }
@@ -2536,6 +2685,7 @@ async function doShare(kind, what, idx){
   else if (kind === 'tg') tgSend(lines, false);
 }
 document.addEventListener('click', e => {
+  if (e.target.closest('[data-bell]')){ toggleWatch(); return; }
   const b = e.target.closest('[data-share]');
   if (b){ doShare(b.dataset.share, b.dataset.what); return; }
   const c = e.target.closest('[data-copysig]');
@@ -2860,6 +3010,7 @@ $('b_connect').onclick = async () => {
 renderBroker();
 
 renderHeader();
+renderWatched();
 setAuto();
 scanCurrent();
 </script>

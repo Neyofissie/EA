@@ -197,3 +197,12 @@ Choose **Volume profile** (or **All three**) in the strategy selector.
 5. **Chart:** the profile histogram on the right (value area blue, POC orange), POC / VAH / VAL lines, and a *VP · volume / time · ADX* chip.
 
 Forex and gold have no central volume, so for them the profile counts **time at each price** (Market Profile). Crypto, stocks and ETFs use real volume.
+
+## Watch a setup (🔔) and favourites (★)
+- **🔔 Alert me when it triggers** (top of the Forecast, for any upcoming setup) adds the setup to **Watched setups** (Scanner tab). The app then:
+  - **Checks the live price** about every 15 s on Binance, or every minute on Twelve Data. When price reaches the entry zone (or breaks the trigger level) you get an **"at entry"** notification.
+  - **Re-scans after every candle close.** When the confirmation candle fires the signal you get **"TRIGGERED"** with entry, SL and TP1–TP3. It is also posted to Telegram if auto-post is on, and placed on MT5 if auto-trade is on. If the structure changes against it, the watch is marked **Cancelled**.
+  - Tap a watched setup to open its chart; ✕ removes it.
+- **★ in the symbol box** adds or removes the current pair from your watchlist.
+
+These alerts run while the app is open (on a computer, or a phone that is awake). Telegram forwarding gets them to your phone anywhere.
