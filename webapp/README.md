@@ -206,3 +206,13 @@ Forex and gold have no central volume, so for them the profile counts **time at 
 - **★ in the symbol box** adds or removes the current pair from your watchlist.
 
 These alerts run while the app is open (on a computer, or a phone that is awake). Telegram forwarding gets them to your phone anywhere.
+
+## Strategy 4: Supply & Demand (first return to a fresh zone)
+Choose **Supply & Demand** (or **All strategies**) in the strategy selector.
+- **Zone:** a base of 1–3 small candles (range ≤ 1× ATR) that price left with 1–2 strong candles. A strong candle has a body ≥ 2× the average body of the last 20 candles, and price must get at least 1.2× ATR away. A rally away makes a **demand** zone (base low → top of the base bodies); a drop makes a **supply** zone. A zone only exists once that departure candle has closed.
+- **Freshness:** each return uses up orders, so by default only the **first return** is traded. A zone dies when a candle closes through its far edge, or after 300 candles.
+- **Entry:** price comes back into a fresh demand zone and a bullish candle closes back above it → BUY. The stop goes beyond the zone's far edge plus the ATR buffer. Mirror for supply. By default only with the trend.
+- **Chart:** green demand / red supply zones labelled *fresh* or *tested n×*, with the departure strength in ATR. The forecast shows the nearest fresh zone as a limit order.
+- **Settings → Supply & demand:** base size, departure strength, minimum move away, number of returns to trade, zone lifetime, direction.
+
+**How it differs from support & resistance:** S/R levels get *stronger* with more touches. Supply/demand zones get *weaker* with each return, and the best one is untouched.

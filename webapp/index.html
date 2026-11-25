@@ -94,6 +94,8 @@ dialog{overflow-x:hidden}
 .ovr.ob-d{background:rgba(168,85,247,.16);border-top:1px dashed rgba(192,132,252,.8);border-bottom:1px dashed rgba(192,132,252,.8)}
 .ovr.ob-s{background:rgba(236,72,153,.14);border-top:1px dashed rgba(244,114,182,.8);border-bottom:1px dashed rgba(244,114,182,.8)}
 .ovr.fvg{background:rgba(56,189,248,.14);border-top:1px dotted rgba(56,189,248,.8);border-bottom:1px dotted rgba(56,189,248,.8)}
+.ovr.dz{background:rgba(16,185,129,.13);border:1px solid rgba(16,185,129,.55);border-right:0}
+.ovr.sz{background:rgba(244,63,94,.12);border:1px solid rgba(244,63,94,.55);border-right:0}
 .ovr.sup{background:rgba(34,197,94,.10);border-top:1px solid rgba(34,197,94,.45);border-bottom:1px solid rgba(34,197,94,.45)}
 .ovr.res{background:rgba(239,68,68,.10);border-top:1px solid rgba(239,68,68,.45);border-bottom:1px solid rgba(239,68,68,.45)}
 .ovr.entryln{border-top:1px dashed rgba(96,165,250,.9);height:0!important}
@@ -321,8 +323,9 @@ button.mini{padding:3px 8px;font-size:12px;min-height:0}
       <option value="smc">SMC: BOS + retest</option>
       <option value="sr">Support &amp; Resistance</option>
       <option value="vp">Volume profile (trend)</option>
+      <option value="sd">Supply &amp; Demand</option>
       <option value="both">SMC + S/R</option>
-      <option value="all">All three</option>
+      <option value="all">All strategies</option>
     </select>
     <select id="source" title="Data source" aria-label="Data source" hidden>
       <option value="binance">Crypto (Binance)</option>
@@ -460,7 +463,7 @@ button.mini{padding:3px 8px;font-size:12px;min-height:0}
     <label class="full">Twelve Data API key (free at twelvedata.com — needed for forex/gold)
       <input id="s_tdkey" type="password" autocomplete="off"></label>
     <div class="full muted" id="cfgState" style="font-size:12px"></div>
-    <label>Strategy<select id="s_strategy"><option value="smc">SMC: BOS + retest</option><option value="sr">Support &amp; Resistance</option><option value="vp">Volume profile (strong trend)</option><option value="both">SMC + S/R</option><option value="all">All three</option></select></label>
+    <label>Strategy<select id="s_strategy"><option value="smc">SMC: BOS + retest</option><option value="sr">Support &amp; Resistance</option><option value="vp">Volume profile (strong trend)</option><option value="sd">Supply &amp; Demand (fresh zones)</option><option value="both">SMC + S/R</option><option value="all">All strategies</option></select></label>
     <label>Swing length (bars each side)<input id="s_swing" type="number" min="1"></label>
     <div class="full" style="border-top:1px solid var(--line);padding-top:10px;color:var(--text);font-weight:600">Build keys into the app</div>
     <div class="full muted" style="font-size:12px">Saves you typing keys on every phone and computer. Press the button, put the downloaded <b>config.js</b> into the app folder next to index.html, and upload the folder to Netlify again.
@@ -504,6 +507,13 @@ button.mini{padding:3px 8px;font-size:12px;min-height:0}
         <label style="flex-direction:row;align-items:center;color:var(--text)"><input type="checkbox" id="rq_Discount"> Premium / discount</label>
         <label style="flex-direction:row;align-items:center;color:var(--text)"><input type="checkbox" id="rq_Killzone"> Kill zone</label>
       </div></div>
+    <div class="full" style="border-top:1px solid var(--line);padding-top:10px;color:var(--text);font-weight:600">Supply &amp; demand</div>
+    <label>Base candle max size (× ATR)<input id="s_sdbase" type="number" step="0.1" min="0.2"></label>
+    <label>Departure candle min body (× average body)<input id="s_sddep" type="number" step="0.1" min="1"></label>
+    <label>Min move away from the zone (× ATR)<input id="s_sdmove" type="number" step="0.5" min="0.5"></label>
+    <label>Trade up to N returns (1 = first return only)<input id="s_sdtouches" type="number" min="1" max="5"></label>
+    <label>Forget zones after N candles<input id="s_sdlook" type="number" min="20"></label>
+    <label>Direction<select id="s_sdtrend"><option value="trend">With the trend only</option><option value="any">Both directions</option></select></label>
     <div class="full" style="border-top:1px solid var(--line);padding-top:10px;color:var(--text);font-weight:600">Volume profile</div>
     <label>Profile length (candles)<input id="s_vplook" type="number" min="30" max="1000"></label>
     <label>Leave out the latest N candles<input id="s_vplag" type="number" min="0" max="100"></label>
@@ -628,7 +638,7 @@ const DEFAULTS = {
   watched:[],
   tg:{token:'', chat:'', auto:false, setups:false, footer:'Not financial advice. Trade at your own risk.'},
   broker:{token:'', remember:true, accountId:'', auto:false, risk:0.5, maxOpen:3, dayLossPct:3, day:null, magic:240521, suffix:'', map:'', managed:[]},
-  p:{vpLook:120, vpLag:10, vpBins:48, vpVA:70, vpAdx:25, vpShow:true, mtfOn:true, alertMtf:false, mtfWatchTD:false, alertBasis:'rr', alertRR:2, alertOn:true, alertMin:50, alertMinN:8, alertGateTrades:true, smcMode:'fast', intSwing:2, htfMode:'ema', htfPd:false, adxMin:0, volLo:0, volHi:0, ltfConfirm:false, news:true, newsBefore:30, newsAfter:30, corr:true, dailyLossR:3, maxOpenBt:3, tpMulti:true, tp1R:1, tp3Mode:'liq', tp3R:3, split:'50/30/20', be:true, view:'clean', poi:'level', choch:false, dispAtr:1.0, session:'both', minConf:0, req:[], strategy:'smc', srTouches:2, zoneW:0.5, srLook:300, tpMode:'zone', minRR:1.5, srTrend:'trend', swing:5, trend:'EMA + Structure', ema:200, htfEma:50, useHtf:true, tol:0.25, maxRetest:20, rej:true, slAtr:0.5, rr:2, fresh:5, closed:true},
+  p:{sdBase:1.0, sdDep:2.0, sdMove:1.2, sdTouches:1, sdLook:300, sdTrend:'trend', vpLook:120, vpLag:10, vpBins:48, vpVA:70, vpAdx:25, vpShow:true, mtfOn:true, alertMtf:false, mtfWatchTD:false, alertBasis:'rr', alertRR:2, alertOn:true, alertMin:50, alertMinN:8, alertGateTrades:true, smcMode:'fast', intSwing:2, htfMode:'ema', htfPd:false, adxMin:0, volLo:0, volHi:0, ltfConfirm:false, news:true, newsBefore:30, newsAfter:30, corr:true, dailyLossR:3, maxOpenBt:3, tpMulti:true, tp1R:1, tp3Mode:'liq', tp3R:3, split:'50/30/20', be:true, view:'clean', poi:'level', choch:false, dispAtr:1.0, session:'both', minConf:0, req:[], strategy:'smc', srTouches:2, zoneW:0.5, srLook:300, tpMode:'zone', minRR:1.5, srTrend:'trend', swing:5, trend:'EMA + Structure', ema:200, htfEma:50, useHtf:true, tol:0.25, maxRetest:20, rej:true, slAtr:0.5, rr:2, fresh:5, closed:true},
   wl:{
     binance:['BTCUSDT','ETHUSDT','SOLUSDT','BNBUSDT','XRPUSDT','ADAUSDT','DOGEUSDT','AVAXUSDT'],
     twelvedata:['EUR/USD','GBP/USD','USD/JPY','AUD/USD','USD/CAD','GBP/JPY','EUR/JPY','XAU/USD','US30','NAS100'],
@@ -1021,6 +1031,8 @@ function analyze(cs, p, htfBias, ctx = {}){
   const useSmc = ['smc', 'both', 'all'].includes(p.strategy), useSr = ['sr', 'both', 'all'].includes(p.strategy), useVp = ['vp', 'all'].includes(p.strategy);
   const sr = useSr ? srScan(cs, p, atr, trendArr, htfBias) : {zones:[], signals:[], plan:null};
   const vp = useVp ? vpScan(cs, p, atr, htfBias) : {signals:[], plan:null, profile:null};
+  const useSd = ['sd', 'all'].includes(p.strategy);
+  const sd = useSd ? sdScan(cs, p, atr, trendArr, htfBias) : {signals:[], plan:null, zones:[]};
   // ----- quality filters -----
   const needAdx = p.adxMin > 0, needVol = p.volLo > 0 || p.volHi > 0;
   const adx = needAdx ? adxArr(cs) : null;
@@ -1032,8 +1044,11 @@ function analyze(cs, p, htfBias, ctx = {}){
   const gateList = (i, d, entry) => {
     const g = [];
     if (p.useHtf){
-      if (p.htfMode !== 'structure') g.push({name:`HTF EMA ${d===1?'up':'down'}`, ok: htfBias[i] === d});
-      if (p.htfMode !== 'ema') g.push({name:`HTF structure ${d===1?'bullish':'bearish'}`, ok: !!htfS && htfS[i].dir === d});
+      const word = (v, a, b) => v === 1 ? a : v === -1 ? b : 'unclear';
+      if (p.htfMode !== 'structure'){ const okE = htfBias[i] === d;
+        g.push({name: okE ? `HTF EMA ${d===1?'up':'down'}` : `HTF EMA must be ${d===1?'up':'down'} (it is ${word(htfBias[i], 'up', 'down')})`, ok: okE}); }
+      if (p.htfMode !== 'ema'){ const v = htfS ? htfS[i].dir : 0, okS = v === d;
+        g.push({name: okS ? `HTF structure ${d===1?'bullish':'bearish'}` : `HTF structure must be ${d===1?'bullish':'bearish'} (it is ${word(v, 'bullish', 'bearish')})`, ok: okS}); }
       if (p.htfPd){ const h = htfS && htfS[i]; const mid = h && h.lo !== null && h.hi !== null ? (h.lo + h.hi)/2 : null;
         g.push({name:`Entry in HTF ${d===1?'discount':'premium'}`, ok: mid !== null && (d === 1 ? entry < mid : entry > mid)}); }
     }
@@ -1075,7 +1090,7 @@ function analyze(cs, p, htfBias, ctx = {}){
     }
     return true;
   };
-  const good = (useSmc ? signals : []).concat(sr.signals, vp.signals)
+  const good = (useSmc ? signals : []).concat(sr.signals, vp.signals, sd.signals)
     .filter(passes).sort((a,b) => a.i - b.i);
   for (const s of good) s.rWin = Math.abs(s.tp - s.entry) / Math.abs(s.entry - s.sl);
   const last = good[good.length-1] || null;
@@ -1176,6 +1191,8 @@ function analyze(cs, p, htfBias, ctx = {}){
   }
   else if (sr.plan)
     plan = sr.plan;
+  else if (sd.plan)
+    plan = sd.plan;
   else if (vp.plan)
     plan = vp.plan;
   else if (!useSmc) plan = null;
@@ -1193,7 +1210,7 @@ function analyze(cs, p, htfBias, ctx = {}){
   if (plan && plan.hits === undefined) plan.hits = 0;
 
   return {
-    vp: vp.profile, ema, bos: useSmc ? bos : [], zones: sr.zones, pivots, sweeps, signals:good, trendDir, state: useSmc && pend ? pend.dir : 0,
+    vp: vp.profile, sdZones: sd.zones, ema, bos: useSmc ? bos : [], zones: sr.zones, pivots, sweeps, signals:good, trendDir, state: useSmc && pend ? pend.dir : 0,
     level: useSmc && pend ? pend.lvl : null, htf: htfNow,
     last, lastAgo: last ? n-1-last.i : null, price: close, plan, stats, loAt, hiAt,
     ltfStart: p.ltfConfirm ? ltfStart : null,
@@ -1283,6 +1300,79 @@ function srScan(cs, p, atr, trendArr, htfBias){
   }
   const out = zones.filter(strong).map(z => { const [zb, zt] = band(z, i); return {zb, zt, touches:z.touches, first:z.first}; });
   return {zones: out, signals, plan};
+}
+
+// ---------- Supply & Demand: first return to a fresh zone ----------
+// A zone is a base of 1-3 small candles that price left with 1-2 strong candles. It exists from the close of that
+// departure, so nothing here uses later candles. Demand: proximal = top of the base bodies, distal = base low.
+// Supply mirrors it. Each return uses up orders, so by default only the first visit is traded.
+function sdScan(cs, p, atr, trendArr, htfBias){
+  const n = cs.length, signals = [], zones = [], seen = new Set();
+  const allowed = (d, i) => p.sdTrend === 'any' || trendArr[i] === d;
+  const small = k => cs[k].h - cs[k].l <= p.sdBase*atr[k];
+  // "strong" is relative to this market's own candles: body vs the average body of the previous 20
+  const avgBody = new Array(n).fill(0);
+  { let sum = 0; for (let k = 0; k < n; k++){ sum += Math.abs(cs[k].c - cs[k].o); if (k >= 20) sum -= Math.abs(cs[k-20].c - cs[k-20].o); avgBody[k] = sum/Math.min(k+1, 20); } }
+  for (let i = 5; i < n; i++){
+    const c = cs[i], pc = cs[i-1];
+    // 1. existing zones: broken, visited, traded
+    for (const z of zones){
+      if (!z.alive) continue;
+      if (i - z.created > p.sdLook){ z.alive = false; continue; }
+      const d = z.dir;
+      if (d === 1 ? c.c < z.dist : c.c > z.dist){ z.alive = false; continue; }         // closed through the far edge
+      if (i <= z.created) continue;
+      const inNow = d === 1 ? c.l <= z.prox : c.h >= z.prox, inPrev = d === 1 ? pc.l <= z.prox : pc.h >= z.prox;
+      if (inNow && !inPrev) z.visits++;                                               // a new return to the zone
+      if (!z.used && z.visits >= 1 && z.visits <= p.sdTouches && (inNow || inPrev) &&
+          (d === 1 ? c.c > z.prox && c.c > c.o : c.c < z.prox && c.c < c.o) && allowed(d, i)){
+        const sl = z.dist - d*p.slAtr*atr[i];
+        signals.push({i, t:c.t, dir:d, entry:c.c, sl, tp:c.c + d*p.rr*Math.abs(c.c - sl), level:z.prox, htf:htfBias[i], kind:'S&D'});
+        z.used = true;
+      }
+    }
+    // 2. a new zone, confirmed by the departure that closes on this candle
+    for (const d of [1, -1]){
+      for (const legN of [1, 2]){
+        const ls = i - legN + 1, be = ls - 1;
+        if (be < 1) continue;
+        let ok = true, big = false;
+        for (let k = ls; k <= i; k++){
+          if (d === 1 ? !(cs[k].c > cs[k].o) : !(cs[k].c < cs[k].o)) ok = false;
+          if (Math.abs(cs[k].c - cs[k].o) >= p.sdDep*(avgBody[k-1] || avgBody[k])) big = true;
+        }
+        if (!ok || !big || !small(be)) continue;
+        let bs = be;
+        while (bs - 1 >= 0 && be - (bs - 1) < 3 && small(bs - 1)) bs--;
+        const key = `${bs}:${be}:${d}`;
+        if (seen.has(key)) break;
+        let bodyHi = -Infinity, bodyLo = Infinity, hi = -Infinity, lo = Infinity;
+        for (let k = bs; k <= be; k++){
+          bodyHi = Math.max(bodyHi, cs[k].o, cs[k].c); bodyLo = Math.min(bodyLo, cs[k].o, cs[k].c);
+          hi = Math.max(hi, cs[k].h); lo = Math.min(lo, cs[k].l);
+        }
+        const prox = d === 1 ? bodyHi : bodyLo, dist = d === 1 ? lo : hi;
+        const away = d === 1 ? c.c - prox : prox - c.c;
+        if (away < p.sdMove*atr[i]) continue;
+        seen.add(key);
+        zones.push({dir:d, prox, dist, created:i, baseStart:bs, visits:0, used:false, alive:true, strength: away/atr[i]});
+        break;
+      }
+    }
+  }
+  // forecast: nearest fresh zone ahead of price in an allowed direction, within 5 ATR
+  const i = n-1, close = cs[i].c;
+  let plan = null, best = Infinity;
+  const fresh = zones.filter(z => z.alive && !z.used && z.visits < p.sdTouches);
+  for (const z of fresh){
+    const d = z.dir, dist = d === 1 ? close - z.prox : z.prox - close;
+    if (dist < 0 || dist > 5*atr[i] || !allowed(d, i) || dist >= best) continue;
+    best = dist;
+    const sl = z.dist - d*p.slAtr*atr[i];
+    plan = {dir:d, type:'limit', kind:'sd', entry:z.prox, sl, tp: z.prox + d*p.rr*Math.abs(z.prox - sl), tol:0, invalid:z.dist,
+      zprox:z.prox, zdist:z.dist, strength:z.strength, visits:z.visits, bosT: cs[z.created].t, htfOk:true};
+  }
+  return {signals, plan, zones: fresh.map(z => ({dir:z.dir, lo:Math.min(z.prox, z.dist), hi:Math.max(z.prox, z.dist), first:z.baseStart, strength:z.strength, visits:z.visits}))};
 }
 
 // ---------- Volume profile: value-area retest in a strong trend ----------
@@ -1398,7 +1488,7 @@ function statusHtml(r){
   const side = p.dir===1 ? 'Buy' : 'Sell';
   const cls = !p.htfOk ? 'neu' : p.type==='active' ? (p.dir===1?'up':'down') : p.type==='limit' ? 'warn' : 'neu';
   const txt = p.type==='active' ? `${side.toUpperCase()} active · ${p.ago} bars`
-    : p.type==='limit' ? `${side} limit ${fmt(p.entry)}${p.kind==='sr' ? ' (S/R)' : p.kind==='vp' ? ' (VP)' : ''}` : p.kind==='vp' ? `VP: watch ${fmt(p.trigger)}` : `Watch break ${fmt(p.trigger)}`;
+    : p.type==='limit' ? `${side} limit ${fmt(p.entry)}${p.kind==='sr' ? ' (S/R)' : p.kind==='vp' ? ' (VP)' : p.kind==='sd' ? ' (S&D)' : ''}` : p.kind==='vp' ? `VP: watch ${fmt(p.trigger)}` : `Watch break ${fmt(p.trigger)}`;
   return `<span class="pill ${cls}">${txt}${p.htfOk ? '' : ' · vs HTF'}</span>`;
 }
 const pct = x => x==null ? '–' : Math.round(x*100) + '%';
@@ -1419,12 +1509,14 @@ function forecastHtml(r){
   const label = p.type==='active' ? `Trade running · ${p.kind || 'SMC'}`
     : p.kind==='smc' && p.type==='limit' && p.poi !== 'Level' ? `Limit order at ${p.poi==='OB' ? 'order block' : 'FVG'}`
     : p.kind==='sr' ? `Limit order at ${up ? 'support' : 'resistance'}`
+    : p.kind==='sd' ? `Limit order at a fresh ${up ? 'demand' : 'supply'} zone`
     : p.kind==='vp' ? (p.type === 'limit' ? `Limit order at the value area ${up ? 'high' : 'low'}` : 'Strong trend · waiting for acceptance')
     : p.type==='limit' ? 'Limit order · waiting for retest' : 'Possible · waiting for break';
   let cond;
   if (p.type==='active') cond = p.hits
     ? `Signal fired ${p.ago} candles ago. TP${p.hits} hit${S.p.be ? ', stop moved to entry (break-even)' : ''}. The rest is still running.`
     : `Signal fired ${p.ago} candles ago. Neither SL nor TP has been hit yet.`;
+  else if (p.kind==='sd') cond = `Fresh ${up ? 'demand' : 'supply'} zone ${fmt(Math.min(p.zprox, p.zdist))} – ${fmt(Math.max(p.zprox, p.zdist))}: price left it with a strong move (${p.strength.toFixed(1)}× ATR) and ${p.visits ? 'has returned ' + p.visits + '× since' : 'has not been back yet'}. ${up ? 'Buy' : 'Sell'} the first return when a ${up ? 'bullish' : 'bearish'} candle closes back ${up ? 'above' : 'below'} ${fmt(p.entry)}. The zone is dead if a candle closes ${up ? 'below' : 'above'} ${fmt(p.invalid)}.`;
   else if (p.kind==='vp') cond = p.type === 'limit'
     ? `Strong ${up?'uptrend':'downtrend'} (ADX ${Math.round(p.adx)}) and price is accepted ${up?'above':'below'} the value area (VAH ${fmt(p.vah)}, POC ${fmt(p.poc)}, VAL ${fmt(p.val)}). ${up?'Buy':'Sell'} the pull-back to the value area ${up?'high':'low'} ${fmt(p.entry)} when a ${up?'bullish':'bearish'} candle closes back ${up?'above':'below'} it. The idea fails if price closes back to the POC.`
     : `Strong ${up?'uptrend':'downtrend'} (ADX ${Math.round(p.adx)}). Waiting for price to be accepted ${up?'above':'below'} the value area ${up?'high':'low'} ${fmt(p.entry)} (3 of 5 closes), then for a pull-back to it.`;
@@ -1703,9 +1795,14 @@ function draw(cs, r){
     }
   }
   for (const s of r.signals.slice(annot ? 0 : -4)) markers.push({time:s.t/1000, position:s.dir===1?'belowBar':'aboveBar', color:s.dir===1?'#22c55e':'#ef4444',
-    shape:s.dir===1?'arrowUp':'arrowDown', text:(s.kind==='SMC' ? '' : s.kind==='SMC CHoCH' ? 'CHoCH ' : s.kind==='VP retest' ? 'VP ' : 'S/R ') + (s.dir===1?'BUY':'SELL')});
+    shape:s.dir===1?'arrowUp':'arrowDown', text:(s.kind==='SMC' ? '' : s.kind==='SMC CHoCH' ? 'CHoCH ' : s.kind==='VP retest' ? 'VP ' : s.kind==='S&D' ? 'S&D ' : 'S/R ') + (s.dir===1?'BUY':'SELL')});
   markers.sort((a,b) => a.time-b.time);
 
+  // fresh supply / demand zones: nearest 2 on each side
+  for (const z of (r.sdZones || []).filter(z => z.dir === 1).sort((a, b) => b.hi - a.hi).slice(0, annot ? 3 : 2)
+      .concat((r.sdZones || []).filter(z => z.dir === -1).sort((a, b) => a.lo - b.lo).slice(0, annot ? 3 : 2)))
+    rects.push({l0:Math.max(0, z.first), l1:END, p0:z.lo, p1:z.hi, cls: z.dir === 1 ? 'dz' : 'sz',
+      label:`${z.dir === 1 ? 'Demand' : 'Supply'} · ${z.visits ? 'tested ' + z.visits + '×' : 'fresh'} · ${z.strength.toFixed(1)} ATR`});
   // S/R zones: nearest 3 above and 3 below price
   const near = r.zones.slice().sort((a,b) => Math.abs((a.zb+a.zt)/2 - px) - Math.abs((b.zb+b.zt)/2 - px));
   const zn = annot ? 3 : 1;
@@ -1994,7 +2091,7 @@ async function runBacktest(){
       ${tile('Buys won', st.longs.n ? `${st.longs.w}/${st.longs.n}` : '–')}
       ${tile('Sells won', st.shorts.n ? `${st.shorts.w}/${st.shorts.n}` : '–')}
       ${tile('Avg time in trade', st.avgBars.toFixed(0) + ' candles')}
-      ${['SMC','SMC CHoCH','S/R bounce','S/R flip','VP retest'].map(k => { const x = all.filter(t => t.kind === k); if (!x.length || p.strategy === 'smc') return '';
+      ${['SMC','SMC CHoCH','S/R bounce','S/R flip','VP retest','S&D'].map(k => { const x = all.filter(t => t.kind === k); if (!x.length || p.strategy === 'smc') return '';
         const net = x.reduce((a,t) => a + t.R, 0); return tile(`${k}: won ${x.filter(t => t.outcome==='win').length}/${x.length}`, sgn(net) + 'R', net >= 0 ? 'good' : 'bad'); }).join('')}
     </div>
     <p class="muted" style="margin:0">${p.tpMulti ? `Exits: ${p.split} at TP1 (${p.tp1R}R) / TP2 (strategy target) / TP3 (${p.tp3Mode === 'liq' ? 'next liquidity, else ' + p.tp3R + 'R' : p.tp3R + 'R'})${p.be ? ', stop to break-even after TP1' : ''}. A trade counts as a win once TP1 is hit.` : p.strategy==='sr' && p.tpMode==='zone' ? 'Targets are the next S/R level, so reward varies per trade.' : `At 1:${p.rr} R:R with ${cost}R costs you need a win rate above ${pct(be)} to make money.`}
@@ -2057,7 +2154,7 @@ async function runBacktest(){
 
 // ======================= UI wiring =======================
 const curSymbol = () => S.symbol[S.source] || '';
-const STRAT = {smc:'SMC BOS + retest', sr:'Support & Resistance', vp:'Volume profile', both:'SMC + S/R', all:'SMC + S/R + VP'};
+const STRAT = {smc:'SMC BOS + retest', sr:'Support & Resistance', vp:'Volume profile', sd:'Supply & Demand', both:'SMC + S/R', all:'All strategies'};
 function setStatus(t){ $('status').textContent = t; }
 function toast(msg){
   const box = $('toast'), d = document.createElement('div'); d.textContent = msg; d.setAttribute('role', 'status');
@@ -2381,7 +2478,8 @@ $('bt_tables').onclick = e => {
   e.target.textContent = 'Applied'; toast('Settings applied. Run the backtest again to see full results.'); scanCurrent();
 };
 
-const F = [['s_vplook','vpLook',Number],['s_vplag','vpLag',Number],['s_vpbins','vpBins',Number],['s_vpva','vpVA',Number],['s_vpadx','vpAdx',Number],['s_vpshow','vpShow',v=>v==='1'],
+const F = [['s_sdbase','sdBase',Number],['s_sddep','sdDep',Number],['s_sdmove','sdMove',Number],['s_sdtouches','sdTouches',Number],['s_sdlook','sdLook',Number],['s_sdtrend','sdTrend',String],
+  ['s_vplook','vpLook',Number],['s_vplag','vpLag',Number],['s_vpbins','vpBins',Number],['s_vpva','vpVA',Number],['s_vpadx','vpAdx',Number],['s_vpshow','vpShow',v=>v==='1'],
   ['s_mtfon','mtfOn',v=>v==='1'],['s_alertmtf','alertMtf',v=>v==='1'],['s_mtfwatch','mtfWatchTD',v=>v==='1'],['s_alertbasis','alertBasis',String],['s_alertrr','alertRR',Number],['s_alerton','alertOn',v=>v==='1'],['s_alertmin','alertMin',Number],['s_alertminn','alertMinN',Number],['s_alertgate','alertGateTrades',v=>v==='1'],
   ['s_smcmode','smcMode',String],['s_intswing','intSwing',Number],['s_htfmode','htfMode',String],['s_htfpd','htfPd',v=>v==='1'],['s_adx','adxMin',Number],['s_ltf','ltfConfirm',v=>v==='1'],
   ['s_vollo','volLo',Number],['s_volhi','volHi',Number],['s_news','news',v=>v==='1'],['s_newsb','newsBefore',Number],['s_newsa','newsAfter',Number],
@@ -2614,7 +2712,7 @@ function shareButtons(what){
 }
 // Normalised trade description from a forecast plan or from a fired signal
 function fromPlan(p){
-  return {dir:p.dir, entry:p.entry, sl:p.sl, tps:p.tps || [p.tp], kind: p.kind === 'sr' ? 'Support & resistance' : p.kind === 'vp' ? 'Volume profile retest' : p.choch ? 'SMC CHoCH' : 'SMC BOS + retest',
+  return {dir:p.dir, entry:p.entry, sl:p.sl, tps:p.tps || [p.tp], kind: p.kind === 'sr' ? 'Support & resistance' : p.kind === 'vp' ? 'Volume profile retest' : p.kind === 'sd' ? 'Supply & demand zone' : p.choch ? 'SMC CHoCH' : 'SMC BOS + retest',
     state: p.type === 'active' ? 'Running' : p.type === 'limit' ? 'Limit order (wait for the retest)' : 'Pending: only if structure breaks',
     trigger: p.trigger, gates: p.gates, trail: p.tps && p.tps.trail, hits: p.hits || 0};
 }
