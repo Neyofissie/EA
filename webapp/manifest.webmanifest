@@ -1,6 +1,6 @@
 {
-  "name": "SMC + S/R Scanner",
-  "short_name": "SMC Scanner",
+  "name": "TPC 5M Scanner",
+  "short_name": "TPC Scanner",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

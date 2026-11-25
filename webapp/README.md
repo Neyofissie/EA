@@ -216,3 +216,26 @@ Choose **Supply & Demand** (or **All strategies**) in the strategy selector.
 - **Settings → Supply & demand:** base size, departure strength, minimum move away, number of returns to trade, zone lifetime, direction.
 
 **How it differs from support & resistance:** S/R levels get *stronger* with more touches. Supply/demand zones get *weaker* with each return, and the best one is untouched.
+
+## Strategy: Take Profit Carlos (the only strategy now)
+
+The app now runs one strategy. SMC, S/R, volume profile and supply & demand are removed from the app; they are still in git history.
+
+Rules the scanner checks on the 5-minute chart (all on closed candles, no look-ahead):
+
+1. **Session kill zone**: New York 07:00–10:00 New York time by default (London 02:00–05:00 or Asia 20:00–00:00 in Settings). Entries outside it are skipped.
+2. **13 EMA filter**: no trade when the EMA cuts through the bodies of 4 or more of the last 10 candles (consolidation). Price must ride on the trade's side of the EMA.
+3. **Trendline**: a line through 3 or more separate swing highs (for buys) or swing lows (for sells), with no candle closing through it in between.
+4. **Trendline break**, then a **BOS** within 30 candles: close above the last lower high (buys) or below the last higher low (sells).
+5. **Institutional push**: 3+ same-colour candles in a row, or 2 big displacement candles (body ≥ 2× the average body).
+6. **First FVG** of the push. **Zone**: demand = top of the FVG down to the swing low; supply = bottom of the FVG up to the swing high.
+7. **Wait for the other traders to lose**: the entry is a limit at the far edge of the FVG, so it only fills when price comes back and **completely fills the gap**.
+8. **Stop** just past the swing (0.1 ATR). **Targets**: TP1 2R (half off, stop to entry), TP2 3R, TP3 5R. Never set the target under 1:2.
+9. **1 trade per day** (Settings: up to 5). The zone expires after 36 candles or when a candle closes through the swing.
+
+The forecast panel shows a live checklist of these rules. The walk-forward optimizer now tests R:R, trendline touches, push length, stop buffer and trades per day.
+
+Back-test on many candles (5 000+): with one trade per day in a 3-hour window, 1 000 five-minute candles give only a few trades.
+The prop-firm "$50 plan" and the morning routine are discipline rules, not something the scanner can check.
+
+![Take Profit Carlos setup](tpc-strategy.png)

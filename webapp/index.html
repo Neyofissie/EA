@@ -7,10 +7,10 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="SMC Scanner">
+<meta name="apple-mobile-web-app-title" content="TPC Scanner">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-192.png">
-<title>SMC + S/R Scanner</title>
+<title>TPC 5M Scanner</title>
 <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
 <script src="config.js"></script>
 <style>
@@ -304,7 +304,7 @@ button.mini{padding:3px 8px;font-size:12px;min-height:0}
 </head>
 <body>
 <header id="hdr">
-  <h1>SMC + S/R Scanner</h1>
+  <h1>TPC 5M Scanner</h1>
   <div class="symbox">
     <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
     <input id="symbol" list="symlist" size="11" title="Symbol, e.g. BTCUSDT, EUR/USD, XAU/USD, US30" placeholder="BTCUSDT, XAU/USD, US30" aria-label="Symbol" autocomplete="off" autocapitalize="characters" spellcheck="false" enterkeyhint="search">
@@ -319,14 +319,7 @@ button.mini{padding:3px 8px;font-size:12px;min-height:0}
       <span id="srcLabel">Server</span><i class="srcdot" id="srcDot"></i><span aria-hidden="true">▾</span></button>
     <div class="tfs" id="tfs"></div>
     <label class="muted chip-l">HTF <select id="htf"></select></label>
-    <select id="strategy" title="Strategy" aria-label="Strategy">
-      <option value="smc">SMC: BOS + retest</option>
-      <option value="sr">Support &amp; Resistance</option>
-      <option value="vp">Volume profile (trend)</option>
-      <option value="sd">Supply &amp; Demand</option>
-      <option value="both">SMC + S/R</option>
-      <option value="all">All strategies</option>
-    </select>
+    <select id="strategy" title="Strategy" aria-label="Strategy"><option value="tpc">Take Profit Carlos</option></select>
     <select id="source" title="Data source" aria-label="Data source" hidden>
       <option value="binance">Crypto (Binance)</option>
       <option value="twelvedata">Forex / Gold / Indices (Twelve Data)</option>
@@ -463,8 +456,21 @@ button.mini{padding:3px 8px;font-size:12px;min-height:0}
     <label class="full">Twelve Data API key (free at twelvedata.com — needed for forex/gold)
       <input id="s_tdkey" type="password" autocomplete="off"></label>
     <div class="full muted" id="cfgState" style="font-size:12px"></div>
-    <label>Strategy<select id="s_strategy"><option value="smc">SMC: BOS + retest</option><option value="sr">Support &amp; Resistance</option><option value="vp">Volume profile (strong trend)</option><option value="sd">Supply &amp; Demand (fresh zones)</option><option value="both">SMC + S/R</option><option value="all">All strategies</option></select></label>
-    <label>Swing length (bars each side)<input id="s_swing" type="number" min="1"></label>
+    <div hidden style="display:none"><select id="s_strategy"><option value="tpc">Take Profit Carlos</option></select><input id="s_swing" type="number" min="1"></div>
+    <div class="full" style="border-top:1px solid var(--line);padding-top:10px;color:var(--text);font-weight:600">Strategy rules · Take Profit Carlos (5M)</div>
+    <div class="full muted" style="font-size:12px">Trendline (3+ bounces) breaks → BOS → institutional push (3+ same-colour or 2 big candles) → first FVG of the push makes the zone (FVG to the swing). Enter when price comes back and <b>completely fills the FVG</b>, stop just past the swing, 1:2 minimum, aim 1:3–1:5. Only inside the session kill zone, only when the 13 EMA is clean.</div>
+    <label>Session kill zone (New York time)<select id="c_session"><option value="ny">New York 07:00–10:00</option><option value="london">London 02:00–05:00</option><option value="asia">Asia 20:00–00:00</option></select></label>
+    <label>Consolidation EMA length<input id="c_ema" type="number" min="2"></label>
+    <label>Skip when EMA cuts through ≥ N of the last 10 candles<input id="c_chop" type="number" min="1" max="10"></label>
+    <label>Min trendline touches<input id="c_touch" type="number" min="2" max="6"></label>
+    <label>Swing size (candles each side)<input id="c_swing" type="number" min="1" max="10"></label>
+    <label>Push: same-colour candles in a row<input id="c_push" type="number" min="2" max="8"></label>
+    <label>Displacement candle (× average body)<input id="c_disp" type="number" step="0.1" min="1"></label>
+    <label>Break → BOS must happen within N candles<input id="c_window" type="number" min="5"></label>
+    <label>Zone valid for N candles<input id="c_valid" type="number" min="5"></label>
+    <label>Max trades per day<input id="c_maxday" type="number" min="1" max="5"></label>
+    <label>SL buffer past the swing (× ATR)<input id="c_slbuf" type="number" step="0.05" min="0"></label>
+    <label>Target R:R (TP2)<input id="s_rr" type="number" step="0.5" min="2"></label>
     <div class="full" style="border-top:1px solid var(--line);padding-top:10px;color:var(--text);font-weight:600">Build keys into the app</div>
     <div class="full muted" style="font-size:12px">Saves you typing keys on every phone and computer. Press the button, put the downloaded <b>config.js</b> into the app folder next to index.html, and upload the folder to Netlify again.
       <b>Anyone who opens your site can read keys built into it.</b> Only do this if you keep the link private. If a key leaks, make a new one (Twelve Data dashboard / @BotFather <b>/revoke</b>). Your MT5 login and MetaApi token are never included.</div>
@@ -490,8 +496,9 @@ button.mini{padding:3px 8px;font-size:12px;min-height:0}
     <label>TP3 fallback / fixed (R)<input id="s_tp3r" type="number" step="0.5" min="1"></label>
     <label>Close at TP1 / TP2 / TP3 (%)<input id="s_split" type="text" placeholder="50/30/20"></label>
     <label>After TP1, move SL to entry<select id="s_be"><option value="1">Yes</option><option value="0">No</option></select></label>
-    <div class="full muted" style="font-size:12px">TP2 is the strategy's target: the R:R setting for SMC, or the next S/R level for S/R trades.</div>
-    <label>Chart view<select id="s_annot"><option value="clean">Clean: setup box, its zone, nearest S/R</option><option value="detailed">Detailed: + swings, liquidity, kill zones, BOS history</option></select></label>
+    <div class="full muted" style="font-size:12px">TP2 is the strategy's target (Target R:R). Carlos: never under 1:2, aim 1:3–1:5, up to 1:7.</div>
+    <label>Chart view<select id="s_annot"><option value="clean">Clean: setup box, trendline, zone</option><option value="detailed">Detailed: + past signals</option></select></label>
+    <div hidden style="display:none">
     <div class="full" style="border-top:1px solid var(--line);padding-top:10px;color:var(--text);font-weight:600">SMC confluences</div>
     <label>Entry zone (POI)<select id="s_poi"><option value="level">Broken level (BOS retest)</option><option value="ob">Order block</option><option value="fvg">Fair value gap</option><option value="any">Any: level, OB or FVG</option></select></label>
     <label>Also trade CHoCH reversals<select id="s_choch"><option value="0">No</option><option value="1">Yes</option></select></label>
@@ -541,8 +548,8 @@ button.mini{padding:3px 8px;font-size:12px;min-height:0}
     <label>Max bars to wait for retest<input id="s_maxr" type="number" min="1"></label>
     <label>Rejection candle required<select id="s_rej"><option value="1">Yes</option><option value="0">No</option></select></label>
     <label>SL buffer (× ATR)<input id="s_sl" type="number" step="0.1" min="0"></label>
-    <label>Take-profit R:R<input id="s_rr" type="number" step="0.1" min="0.1"></label>
     <label>“Fresh” signal = within N bars<input id="s_fresh" type="number" min="1"></label>
+    </div>
     <div class="full" style="border-top:1px solid var(--line);padding-top:10px;color:var(--text);font-weight:600">Alerts</div>
     <label>Only alert high-probability setups<select id="s_alerton"><option value="1">Yes</option><option value="0">No, alert every setup</option></select></label>
     <label>Measure success as<select id="s_alertbasis"><option value="rr">Reached the R:R target before the stop</option><option value="tp1">Hit TP1</option></select></label>
@@ -638,7 +645,7 @@ const DEFAULTS = {
   watched:[],
   tg:{token:'', chat:'', auto:false, setups:false, footer:'Not financial advice. Trade at your own risk.'},
   broker:{token:'', remember:true, accountId:'', auto:false, risk:0.5, maxOpen:3, dayLossPct:3, day:null, magic:240521, suffix:'', map:'', managed:[]},
-  p:{sdBase:1.0, sdDep:2.0, sdMove:1.2, sdTouches:1, sdLook:300, sdTrend:'trend', vpLook:120, vpLag:10, vpBins:48, vpVA:70, vpAdx:25, vpShow:true, mtfOn:true, alertMtf:false, mtfWatchTD:false, alertBasis:'rr', alertRR:2, alertOn:true, alertMin:50, alertMinN:8, alertGateTrades:true, smcMode:'fast', intSwing:2, htfMode:'ema', htfPd:false, adxMin:0, volLo:0, volHi:0, ltfConfirm:false, news:true, newsBefore:30, newsAfter:30, corr:true, dailyLossR:3, maxOpenBt:3, tpMulti:true, tp1R:1, tp3Mode:'liq', tp3R:3, split:'50/30/20', be:true, view:'clean', poi:'level', choch:false, dispAtr:1.0, session:'both', minConf:0, req:[], strategy:'smc', srTouches:2, zoneW:0.5, srLook:300, tpMode:'zone', minRR:1.5, srTrend:'trend', swing:5, trend:'EMA + Structure', ema:200, htfEma:50, useHtf:true, tol:0.25, maxRetest:20, rej:true, slAtr:0.5, rr:2, fresh:5, closed:true},
+  p:{cSession:'ny', cEma:13, cChop:4, cSwing:3, cTouches:3, cPush:3, cDisp:2.0, cValid:36, cMaxDay:1, cSlBuf:0.1, cWindow:30, sdBase:1.0, sdDep:2.0, sdMove:1.2, sdTouches:1, sdLook:300, sdTrend:'trend', vpLook:120, vpLag:10, vpBins:48, vpVA:70, vpAdx:25, vpShow:true, mtfOn:true, alertMtf:false, mtfWatchTD:false, alertBasis:'rr', alertRR:2, alertOn:true, alertMin:50, alertMinN:8, alertGateTrades:true, smcMode:'fast', intSwing:2, htfMode:'ema', htfPd:false, adxMin:0, volLo:0, volHi:0, ltfConfirm:false, news:true, newsBefore:30, newsAfter:30, corr:true, dailyLossR:3, maxOpenBt:3, tpMulti:true, tp1R:2, tp3Mode:'rr', tp3R:5, split:'50/30/20', be:true, view:'clean', poi:'level', choch:false, dispAtr:1.0, session:'both', minConf:0, req:[], strategy:'tpc', srTouches:2, zoneW:0.5, srLook:300, tpMode:'zone', minRR:1.5, srTrend:'trend', swing:5, trend:'EMA + Structure', ema:200, htfEma:50, useHtf:false, tol:0.25, maxRetest:20, rej:true, slAtr:0.5, rr:3, fresh:5, closed:true},
   wl:{
     binance:['BTCUSDT','ETHUSDT','SOLUSDT','BNBUSDT','XRPUSDT','ADAUSDT','DOGEUSDT','AVAXUSDT'],
     twelvedata:['EUR/USD','GBP/USD','USD/JPY','AUD/USD','USD/CAD','GBP/JPY','EUR/JPY','XAU/USD','US30','NAS100'],
@@ -666,6 +673,9 @@ const tgChat = () => S.tg.chat || (CFG.telegram && CFG.telegram.chat) || '';
 try { if (!localStorage.getItem('smc-scanner') && CFG.defaultSource) S.source = CFG.defaultSource; } catch(e){}
 // one-time update: the alert threshold default moved from 70% to 50%
 if ((S.v || 0) < 2){ if (S.p.alertMin === 70) S.p.alertMin = 50; S.v = 2; try { localStorage.setItem('smc-scanner', JSON.stringify(S)); } catch(e){} }
+// v3: the app runs one strategy, Take Profit Carlos, on 5M with 1:2 / 1:3 / 1:5 targets
+if ((S.v || 0) < 3){ Object.assign(S.p, {strategy:'tpc', useHtf:false, htfPd:false, adxMin:0, ltfConfirm:false, rr:3, tp1R:2, tp3Mode:'rr', tp3R:5, tpMulti:true, be:true}); S.tf = '5m'; S.v = 3; try { localStorage.setItem('smc-scanner', JSON.stringify(S)); } catch(e){} }
+S.p.strategy = 'tpc';
 
 const $ = id => document.getElementById(id);
 
@@ -1032,6 +1042,8 @@ function analyze(cs, p, htfBias, ctx = {}){
   const sr = useSr ? srScan(cs, p, atr, trendArr, htfBias) : {zones:[], signals:[], plan:null};
   const vp = useVp ? vpScan(cs, p, atr, htfBias) : {signals:[], plan:null, profile:null};
   const useSd = ['sd', 'all'].includes(p.strategy);
+  const useTpc = p.strategy === 'tpc';
+  const tpc = useTpc ? tpcScan(cs, p, atr, htfBias) : {signals:[], plan:null};
   const sd = useSd ? sdScan(cs, p, atr, trendArr, htfBias) : {signals:[], plan:null, zones:[]};
   // ----- quality filters -----
   const needAdx = p.adxMin > 0, needVol = p.volLo > 0 || p.volHi > 0;
@@ -1090,7 +1102,7 @@ function analyze(cs, p, htfBias, ctx = {}){
     }
     return true;
   };
-  const good = (useSmc ? signals : []).concat(sr.signals, vp.signals, sd.signals)
+  const good = (useSmc ? signals : []).concat(sr.signals, vp.signals, sd.signals, tpc.signals)
     .filter(passes).sort((a,b) => a.i - b.i);
   for (const s of good) s.rWin = Math.abs(s.tp - s.entry) / Math.abs(s.entry - s.sl);
   const last = good[good.length-1] || null;
@@ -1129,6 +1141,7 @@ function analyze(cs, p, htfBias, ctx = {}){
     if (trail) tps[2] = d === 1 ? Infinity : -Infinity;                 // the runner exits only on the trailing stop
     let stop = s.sl, rem = 1, R = 0, hits = 0;
     s.outcome = 'open';
+    if (s.instantLoss){ s.hits = 0; s.R = -1; s.outcome = 'loss'; s.exitI = s.i; s.rr = false; continue; }   // limit filled and stopped on the same candle
     for (let k = s.i+1; k < n; k++){
       const c = cs[k];
       if (trail && hits >= 2){                                          // trail behind the last confirmed swing
@@ -1191,6 +1204,8 @@ function analyze(cs, p, htfBias, ctx = {}){
   }
   else if (sr.plan)
     plan = sr.plan;
+  else if (tpc.plan)
+    plan = tpc.plan;
   else if (sd.plan)
     plan = sd.plan;
   else if (vp.plan)
@@ -1210,7 +1225,7 @@ function analyze(cs, p, htfBias, ctx = {}){
   if (plan && plan.hits === undefined) plan.hits = 0;
 
   return {
-    vp: vp.profile, sdZones: sd.zones, ema, bos: useSmc ? bos : [], zones: sr.zones, pivots, sweeps, signals:good, trendDir, state: useSmc && pend ? pend.dir : 0,
+    tpc: useTpc ? tpc : null, vp: vp.profile, sdZones: sd.zones, ema: useTpc ? tpc.e13 : ema, bos: useSmc ? bos : [], zones: sr.zones, pivots, sweeps, signals:good, trendDir, state: useSmc && pend ? pend.dir : 0,
     level: useSmc && pend ? pend.lvl : null, htf: htfNow,
     last, lastAgo: last ? n-1-last.i : null, price: close, plan, stats, loAt, hiAt,
     ltfStart: p.ltfConfirm ? ltfStart : null,
@@ -1300,6 +1315,141 @@ function srScan(cs, p, atr, trendArr, htfBias){
   }
   const out = zones.filter(strong).map(z => { const [zb, zt] = band(z, i); return {zb, zt, touches:z.touches, first:z.first}; });
   return {zones: out, signals, plan};
+}
+
+// ---------- Take Profit Carlos: 5M trendline break → BOS → institutional push → FVG zone, entry on full FVG fill ----------
+// Everything is decided from closed candles only: swings are confirmed `cSwing` candles later, trendlines only use
+// confirmed swings, and the zone exists from the candle that completes the push + FVG.
+const NY_FMT = (() => { try { return new Intl.DateTimeFormat('en-US', {timeZone:'America/New_York', year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', hour12:false}); } catch(e){ return null; } })();
+function nyClock(t){
+  if (!NY_FMT){ const d = new Date(t - 5*3600e3); return {h: d.getUTCHours() + d.getUTCMinutes()/60, day: d.toISOString().slice(0, 10)}; }
+  const parts = {}; for (const x of NY_FMT.formatToParts(new Date(t))) parts[x.type] = x.value;
+  return {h: (+parts.hour % 24) + (+parts.minute)/60, day: `${parts.year}-${parts.month}-${parts.day}`};
+}
+const SESSIONS = {ny:{name:'New York', a:7, b:10}, london:{name:'London', a:2, b:5}, asia:{name:'Asia', a:20, b:24}};
+function tpcScan(cs, p, atr, htfBias){
+  const n = cs.length, L = p.cSwing, sess = SESSIONS[p.cSession] || SESSIONS.ny, signals = [];
+  const close = cs.map(c => c.c), e13 = emaArr(close, p.cEma);
+  const avgBody = new Array(n).fill(0);
+  { let sum = 0; for (let k = 0; k < n; k++){ sum += Math.abs(cs[k].c - cs[k].o); if (k >= 20) sum -= Math.abs(cs[k-20].c - cs[k-20].o); avgBody[k] = sum/Math.min(k+1, 20); } }
+  const clock = cs.map(c => nyClock(c.t));
+  const inSess = k => clock[k].h >= sess.a && clock[k].h < sess.b;
+  // 13 EMA consolidation: the EMA runs through the bodies of too many recent candles
+  const chop = k => { let x = 0; for (let j = Math.max(0, k-9); j <= k; j++) if (Math.min(cs[j].o, cs[j].c) <= e13[j] && e13[j] <= Math.max(cs[j].o, cs[j].c)) x++; return x >= p.cChop; };
+  const SH = [], SLo = [];                                  // confirmed swing highs / lows
+  let lastH = null, prevH = null, lastHi = -1, lastL = null, prevL = null, lastLi = -1, hB = true, lB = true;
+  const tl = {1:null, '-1':null};                           // active trendline per side: 1 = falling line through highs (for buys)
+  const brk = {1:-1e9, '-1':-1e9};                          // candle index of the latest trendline break
+  const bos = {1:null, '-1':null};                          // {i, origin} of the latest BOS after a break
+  let zone = null;                                          // the one live zone
+  const perDay = {};
+  // best line through >= cTouches swing points (no candle closing through it in between)
+  const fitLine = (pts, d, upto) => {
+    let best = null;
+    const recent = pts.slice(-7);
+    for (let a = 0; a < recent.length; a++) for (let b = a+1; b < recent.length; b++){
+      const A = recent[a], B = recent[b];
+      if (d === 1 ? !(B.p < A.p) : !(B.p > A.p)) continue;           // buys: falling line through lower highs; sells: rising through higher lows
+      const slope = (B.p - A.p)/(B.j - A.j), at = j => A.p + slope*(j - A.j);
+      let touches = 0, ok = true;
+      for (const P of recent){ if (P.j < A.j) continue; const tol = 0.25*atr[P.j];
+        if (Math.abs(P.p - at(P.j)) <= tol) touches++; else if (d === 1 ? P.p > at(P.j) + tol : P.p < at(P.j) - tol){ ok = false; break; } }
+      if (!ok || touches < p.cTouches) continue;
+      for (let k = A.j; k <= upto && ok; k++) if (d === 1 ? cs[k].c > at(k) + 0.05*atr[k] : cs[k].c < at(k) - 0.05*atr[k]) ok = false;
+      if (ok && (!best || touches > best.touches || (touches === best.touches && B.j > best.B.j))) best = {A, B, slope, touches, at};
+    }
+    return best;
+  };
+  for (let i = 2*L + 2; i < n; i++){
+    const c = cs[i], pc = cs[i-1], j = i - L;
+    let isH = true, isL = true;
+    for (let k = j-L; k <= j+L; k++){ if (k === j) continue; if (cs[k].h >= cs[j].h) isH = false; if (cs[k].l <= cs[j].l) isL = false; }
+    if (isH){ prevH = lastH; lastH = cs[j].h; lastHi = j; hB = false; SH.push({j, p:cs[j].h}); tl[1] = fitLine(SH, 1, i - 1) || tl[1]; }
+    if (isL){ prevL = lastL; lastL = cs[j].l; lastLi = j; lB = false; SLo.push({j, p:cs[j].l}); tl[-1] = fitLine(SLo, -1, i - 1) || tl[-1]; }
+    // 1. trendline break: a close through an active 3-touch line
+    for (const d of [1, -1]){
+      const t = tl[d]; if (!t) continue;
+      const v = t.at(i), pv = t.at(i-1);
+      if (d === 1 ? c.c > v && pc.c <= pv : c.c < v && pc.c >= pv){ brk[d] = i; tl[d] = {...t, brokeAt:i}; }
+      else if (t.brokeAt && i - t.brokeAt > p.cWindow) tl[d] = null;
+    }
+    // 2. BOS after the break: close above the last LOWER high (buys) / below the last HIGHER low (sells)
+    if (!hB && lastH !== null && c.c > lastH){
+      hB = true;
+      if (i - brk[1] <= p.cWindow && prevH !== null && lastH < prevH){
+        let o = lastHi; for (let k = lastHi; k <= i; k++) if (cs[k].l < cs[o].l) o = k;
+        bos[1] = {i, origin:o, level:lastH, levelJ:lastHi};
+      }
+    }
+    if (!lB && lastL !== null && c.c < lastL){
+      lB = true;
+      if (i - brk[-1] <= p.cWindow && prevL !== null && lastL > prevL){
+        let o = lastLi; for (let k = lastLi; k <= i; k++) if (cs[k].h > cs[o].h) o = k;
+        bos[-1] = {i, origin:o, level:lastL, levelJ:lastLi};
+      }
+    }
+    // 3. institutional push + first FVG in the leg → zone (checked for a few candles after the BOS while the push runs)
+    for (const d of [1, -1]){
+      const b = bos[d]; if (!b || i - b.i > 6 || (zone && zone.bosI === b.i)) continue;
+      const o = b.origin;
+      let run = 0, bestRun = 0, big = 0;
+      for (let k = o + 1; k <= i; k++){
+        const same = d === 1 ? cs[k].c > cs[k].o : cs[k].c < cs[k].o;
+        run = same ? run + 1 : 0; bestRun = Math.max(bestRun, run);
+        if (same && Math.abs(cs[k].c - cs[k].o) >= p.cDisp*(avgBody[k-1] || avgBody[k])) big++;
+      }
+      if (bestRun < p.cPush && big < 2) continue;
+      let f = null;
+      for (let k = o + 1; k < i && !f; k++){                                         // the FIRST gap of the push
+        if (d === 1 ? cs[k-1].h < cs[k+1].l : cs[k-1].l > cs[k+1].h) f = {k, near: d === 1 ? cs[k+1].l : cs[k+1].h, far: d === 1 ? cs[k-1].h : cs[k-1].l};
+      }
+      if (!f) continue;
+      if (chop(i) || (d === 1 ? c.c < e13[i] : c.c > e13[i])) continue;              // 13 EMA: no consolidation, price riding the right side
+      const swing = d === 1 ? cs[o].l : cs[o].h;
+      zone = {dir:d, bosI:b.i, created:i, origin:o, swing, fvgNear:f.near, fvgFar:f.far, fvgK:f.k, level:b.level, levelJ:b.levelJ,
+        tl: tl[d] && tl[d].brokeAt ? {aj:tl[d].A.j, ap:tl[d].A.p, slope:tl[d].slope, end:tl[d].brokeAt} : null,
+        push: bestRun >= p.cPush ? `${bestRun} candles in a row` : `${big} displacement candles`};
+      bos[d] = null;
+    }
+    // 4. entry: price pulls back, takes out the early buyers and fills the whole FVG (tags its far edge)
+    if (zone && i > zone.created){
+      const d = zone.dir;
+      if (d === 1 ? c.c < zone.swing : c.c > zone.swing){ zone = null; continue; }   // closed through the swing: setup dead
+      if (i - zone.created > p.cValid){ zone = null; continue; }
+      const filled = d === 1 ? c.l <= zone.fvgFar : c.h >= zone.fvgFar;
+      if (filled && inSess(i)){
+        const day = clock[i].day;
+        if ((perDay[day] || 0) < p.cMaxDay){
+          perDay[day] = (perDay[day] || 0) + 1;
+          const entry = d === 1 ? Math.min(c.o, zone.fvgFar) : Math.max(c.o, zone.fvgFar);
+          const sl = zone.swing - d*p.cSlBuf*atr[i];
+          signals.push({i, t:c.t, dir:d, entry, sl, tp: entry + d*p.rr*Math.abs(entry - sl), level:zone.fvgFar, htf:htfBias[i], kind:'TPC',
+            instantLoss: d === 1 ? c.l <= sl : c.h >= sl, zone:{...zone}});
+        }
+        zone = null;
+      }
+    }
+  }
+  // forecast + live checklist
+  const i = n - 1, now = cs[i], dirGuess = zone ? zone.dir : (now.c >= e13[i] ? 1 : -1);
+  const d = dirGuess, t = tl[d], today = clock[i].day;
+  const checklist = [
+    {name:`${sess.name} kill zone (${String(sess.a).padStart(2, '0')}:00–${String(sess.b % 24).padStart(2, '0')}:00 New York)`, ok: inSess(i)},
+    {name:`13 EMA clean, price ${d === 1 ? 'above' : 'below'} it (no consolidation)`, ok: !chop(i) && (d === 1 ? now.c >= e13[i] : now.c <= e13[i])},
+    {name:`Trendline with ${p.cTouches}+ touches`, ok: !!t || !!zone},
+    {name:'Trendline broken', ok: !!zone || i - brk[d] <= p.cWindow},
+    {name:`BOS (close ${d === 1 ? 'above the last lower high' : 'below the last higher low'})`, ok: !!zone || !!bos[d]},
+    {name:'Institutional push + first FVG', ok: !!zone, note: zone ? zone.push : ''},
+    {name:`Trades today ${perDay[today] || 0} / ${p.cMaxDay}`, ok: (perDay[today] || 0) < p.cMaxDay},
+  ];
+  let plan = null;
+  if (zone){
+    const sl = zone.swing - d*p.cSlBuf*atr[i];
+    plan = {dir:d, type:'limit', kind:'tpc', entry:zone.fvgFar, sl, tp: zone.fvgFar + d*p.rr*Math.abs(zone.fvgFar - sl), tol:0,
+      invalid: zone.swing, zone, bosT: cs[zone.bosI].t, checklist, htfOk:true, expiresIn: p.cValid - (i - zone.created)};
+  }
+  const lineNow = t ? {aj:t.A.j, ap:t.A.p, slope:t.slope, end: t.brokeAt || i + 5} : null;
+  return {signals, plan, checklist, dir:d, e13, line: zone && zone.tl ? zone.tl : lineNow, zone, session:sess, inSession: inSess(i)};
 }
 
 // ---------- Supply & Demand: first return to a fresh zone ----------
@@ -1488,19 +1638,23 @@ function statusHtml(r){
   const side = p.dir===1 ? 'Buy' : 'Sell';
   const cls = !p.htfOk ? 'neu' : p.type==='active' ? (p.dir===1?'up':'down') : p.type==='limit' ? 'warn' : 'neu';
   const txt = p.type==='active' ? `${side.toUpperCase()} active · ${p.ago} bars`
-    : p.type==='limit' ? `${side} limit ${fmt(p.entry)}${p.kind==='sr' ? ' (S/R)' : p.kind==='vp' ? ' (VP)' : p.kind==='sd' ? ' (S&D)' : ''}` : p.kind==='vp' ? `VP: watch ${fmt(p.trigger)}` : `Watch break ${fmt(p.trigger)}`;
+    : p.type==='limit' ? `${side} limit ${fmt(p.entry)}${p.kind==='sr' ? ' (S/R)' : p.kind==='vp' ? ' (VP)' : p.kind==='sd' ? ' (S&D)' : p.kind==='tpc' ? ' (FVG fill)' : ''}` : p.kind==='vp' ? `VP: watch ${fmt(p.trigger)}` : `Watch break ${fmt(p.trigger)}`;
   return `<span class="pill ${cls}">${txt}${p.htfOk ? '' : ' · vs HTF'}</span>`;
 }
 const pct = x => x==null ? '–' : Math.round(x*100) + '%';
 const SHORT = {OB:'OB', FVG:'FVG', Sweep:'Sweep', Displacement:'Disp', Discount:'P/D', Killzone:'KZ'};
 const confTags = s => !s.conf ? '' : `<span class="muted" title="${CONF_KEYS.map(k => (s.conf[k] ? '✓ ' : '✗ ') + CONF_LABEL[k]).join('&#10;')}">${
   CONF_KEYS.filter(k => s.conf[k]).map(k => SHORT[k]).join(' · ') || 'none'} (${s.score}/6)</span>`;
+const tpcChecklist = list => `<div style="display:grid;gap:2px">${list.map(c => `<div>${c.ok ? '<span class="good">✓</span>' : '<span class="bad">✗</span>'} ${esc(c.name)}${c.note ? ` <span class="muted">· ${esc(c.note)}</span>` : ''}</div>`).join('')}</div>`;
 function forecastHtml(r){
   const p = r.plan, st = r.stats, tf = S.tf;
   const record = st.trades >= 3
     ? `${st.wins} of ${st.trades} past setups hit ${S.p.tpMulti ? 'TP1' : 'TP'} (${pct(st.winRate)})${S.p.tpMulti ? `, TP2 ${pct(st.tp2)}, TP3 ${pct(st.tp3)}` : ''} · average ${st.avgR >= 0 ? '+' : ''}${st.avgR.toFixed(2)}R per trade`
     : `Only ${st.trades} finished setup${st.trades===1?'':'s'} in loaded history, too few to judge`;
   const rrLine = st.rrN ? `<div>Reached ${S.p.alertRR}R</div><div>${pct(st.rrRate)} of ${st.rrN} past setups reached ${S.p.alertRR}× risk before the stop${goodOdds(r, p) && p ? ' · <span class="good">meets your alert rule</span>' : ''}</div>` : '';
+  if (!p && r.tpc) return `${S.p.mtfOn ? `<div>Timeframes</div><div>${mtfHtml(r.mtf)}</div>` : ''}<div>Setup</div><div class="muted">No Carlos setup yet on ${tf}. ${r.tpc.inSession ? 'Kill zone is open.' : `Outside the ${r.tpc.session.name} kill zone: sit on your hands.`} Waiting for: ${(r.tpc.checklist.find(c => !c.ok) || {name:'the pull-back into the FVG'}).name.replace(/^Trades today.*/, 'tomorrow (daily trade limit reached)')}.</div>
+    <div>Checklist</div><div>${tpcChecklist(r.tpc.checklist)}</div>
+    <div>Track record</div><div>${record}</div>`;
   if (!p) return `${S.p.mtfOn ? `<div>Timeframes</div><div>${mtfHtml(r.mtf)}</div>` : ''}<div>Setup</div><div class="muted">${r.trendDir && S.p.smcMode === 'fast'
       ? `Current leg is ${r.trendDir === 1 ? 'up' : 'down'}. Waiting for the next ${r.trendDir === 1 ? 'break above an internal high' : 'break below an internal low'} on ${tf}.`
       : `Nothing forming. Trend is not clear enough on ${tf}.`}</div>
@@ -1509,6 +1663,7 @@ function forecastHtml(r){
   const label = p.type==='active' ? `Trade running · ${p.kind || 'SMC'}`
     : p.kind==='smc' && p.type==='limit' && p.poi !== 'Level' ? `Limit order at ${p.poi==='OB' ? 'order block' : 'FVG'}`
     : p.kind==='sr' ? `Limit order at ${up ? 'support' : 'resistance'}`
+    : p.kind==='tpc' ? `Limit order · waiting for the FVG to fill`
     : p.kind==='sd' ? `Limit order at a fresh ${up ? 'demand' : 'supply'} zone`
     : p.kind==='vp' ? (p.type === 'limit' ? `Limit order at the value area ${up ? 'high' : 'low'}` : 'Strong trend · waiting for acceptance')
     : p.type==='limit' ? 'Limit order · waiting for retest' : 'Possible · waiting for break';
@@ -1516,6 +1671,7 @@ function forecastHtml(r){
   if (p.type==='active') cond = p.hits
     ? `Signal fired ${p.ago} candles ago. TP${p.hits} hit${S.p.be ? ', stop moved to entry (break-even)' : ''}. The rest is still running.`
     : `Signal fired ${p.ago} candles ago. Neither SL nor TP has been hit yet.`;
+  else if (p.kind==='tpc') cond = `Trendline broken, structure broke at ${fmt(p.zone.level)} and an institutional push (${p.zone.push}) left a fair value gap. ${up ? 'Demand' : 'Supply'} zone ${fmt(Math.min(p.zone.fvgNear, p.zone.swing))} – ${fmt(Math.max(p.zone.fvgNear, p.zone.swing))}. Let the early ${up ? 'buyers' : 'sellers'} lose: ${up ? 'buy' : 'sell'} only when price comes back and <b>completely fills the FVG</b> at ${fmt(p.entry)}, inside the kill zone. Stop just ${up ? 'below the swing low' : 'above the swing high'} ${fmt(p.sl)}. Dead if a candle closes ${up ? 'below' : 'above'} ${fmt(p.invalid)} or after ${p.expiresIn} more candles.`;
   else if (p.kind==='sd') cond = `Fresh ${up ? 'demand' : 'supply'} zone ${fmt(Math.min(p.zprox, p.zdist))} – ${fmt(Math.max(p.zprox, p.zdist))}: price left it with a strong move (${p.strength.toFixed(1)}× ATR) and ${p.visits ? 'has returned ' + p.visits + '× since' : 'has not been back yet'}. ${up ? 'Buy' : 'Sell'} the first return when a ${up ? 'bullish' : 'bearish'} candle closes back ${up ? 'above' : 'below'} ${fmt(p.entry)}. The zone is dead if a candle closes ${up ? 'below' : 'above'} ${fmt(p.invalid)}.`;
   else if (p.kind==='vp') cond = p.type === 'limit'
     ? `Strong ${up?'uptrend':'downtrend'} (ADX ${Math.round(p.adx)}) and price is accepted ${up?'above':'below'} the value area (VAH ${fmt(p.vah)}, POC ${fmt(p.poc)}, VAL ${fmt(p.val)}). ${up?'Buy':'Sell'} the pull-back to the value area ${up?'high':'low'} ${fmt(p.entry)} when a ${up?'bullish':'bearish'} candle closes back ${up?'above':'below'} it. The idea fails if price closes back to the POC.`
@@ -1528,6 +1684,7 @@ function forecastHtml(r){
   const risk = Math.abs(p.entry - p.sl), reward = Math.abs(p.tps[2] - p.entry), dist = v => v.toFixed(decimals(p.entry));
   const sp = splitOf(S.p.split);
   let confRow = '';
+  if (p.kind === 'tpc' && p.checklist) confRow = `<div>Checklist</div><div>${tpcChecklist(p.checklist)}</div>`;
   if (p.kind === 'smc' && p.known){
     const yes = (ok, txt) => `<div>${ok ? '<span class="good">✓</span>' : '<span class="bad">✗</span>'} ${txt}</div>`;
     const req = S.p.req || [];
@@ -1756,7 +1913,7 @@ function draw(cs, r){
   // empty future candles give room to draw the forecast to the right of price
   const future = Array.from({length:30}, (_, k) => ({time:(lastT + (k+1)*ms)/1000}));
   emaLine.applyOptions({color: r.trendDir===1 ? '#14b8a6' : r.trendDir===-1 ? '#be123c' : '#64748b'});
-  emaLine.setData(cs.map((c,i) => ({time:c.t/1000, value:r.ema[i]})).slice(Math.min(S.p.ema, n-1)));
+  emaLine.setData(cs.map((c,i) => ({time:c.t/1000, value:r.ema[i]})).slice(Math.min(r.tpc ? S.p.cEma : S.p.ema, n-1)));
   extraSeries.forEach(s => chart.removeSeries(s)); extraSeries = [];
   priceLines.forEach(l => candles.removePriceLine(l)); priceLines = [];
   const rects = [], tags = [], END = n;  // zones stop where the forecast box starts
@@ -1770,6 +1927,25 @@ function draw(cs, r){
     ${r.vp && S.p.vpShow ? `<span class="chip mtfchip" title="${r.vp.mode === 'volume' ? 'Built from traded volume' : 'This market has no volume data: time spent at each price'}">VP · ${r.vp.mode === 'volume' ? 'volume' : 'time'} · ADX ${Math.round(r.vp.adx)}</span>` : ''}`;
 
   const markers = [];
+  // Take Profit Carlos: the 3-touch trendline, the BOS level, the FVG and the zone
+  if (r.tpc){
+    const t = r.tpc;
+    if (t.line){
+      const a = Math.max(0, t.line.aj), b = Math.min(n - 1, t.line.end);
+      const tl = chart.addLineSeries({color:'#e2e8f0', lineWidth:2, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false, autoscaleInfoProvider:() => null});
+      tl.setData([{time:cs[a].t/1000, value:t.line.ap}, {time:cs[b].t/1000, value:t.line.ap + t.line.slope*(b - t.line.aj)}]); extraSeries.push(tl);
+      if (t.line.end < n) markers.push({time:cs[b].t/1000, position: t.dir === 1 ? 'aboveBar' : 'belowBar', color:'#e2e8f0', shape:'circle', size:0.5, text:'TL break'});
+    }
+    const z = t.zone;
+    if (z){
+      const lv = chart.addLineSeries({color: z.dir === 1 ? '#14b8a6' : '#e11d48', lineWidth:1, lineStyle:2, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false});
+      lv.setData([{time:cs[z.levelJ].t/1000, value:z.level}, {time:cs[z.bosI].t/1000, value:z.level}]); extraSeries.push(lv);
+      markers.push({time:cs[z.bosI].t/1000, position: z.dir === 1 ? 'aboveBar' : 'belowBar', color:'#94a3b8', shape:'circle', size:0.4, text:'BOS'});
+      rects.push({l0:z.origin, l1:END, p0:z.swing, p1:z.fvgNear, cls: z.dir === 1 ? 'dz' : 'sz', label: z.dir === 1 ? 'Demand zone' : 'Supply zone'});
+      rects.push({l0:z.fvgK, l1:END, p0:z.fvgFar, p1:z.fvgNear, cls:'fvg lab-left', label:'FVG · enter on full fill'});
+    }
+    if (!t.inSession) markers.push({time:cs[n-1].t/1000, position:'aboveBar', color:'#c084fc', shape:'square', size:0.5, text:'Outside kill zone'});
+  }
   // BOS / CHoCH levels
   for (const b of r.bos.slice(annot ? -12 : -1)){
     const sr = chart.addLineSeries({color: b.dir===1 ? '#14b8a6' : '#e11d48', lineWidth:1, lineStyle:2, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false});
@@ -1795,7 +1971,7 @@ function draw(cs, r){
     }
   }
   for (const s of r.signals.slice(annot ? 0 : -4)) markers.push({time:s.t/1000, position:s.dir===1?'belowBar':'aboveBar', color:s.dir===1?'#22c55e':'#ef4444',
-    shape:s.dir===1?'arrowUp':'arrowDown', text:(s.kind==='SMC' ? '' : s.kind==='SMC CHoCH' ? 'CHoCH ' : s.kind==='VP retest' ? 'VP ' : s.kind==='S&D' ? 'S&D ' : 'S/R ') + (s.dir===1?'BUY':'SELL')});
+    shape:s.dir===1?'arrowUp':'arrowDown', text:(s.kind==='SMC' ? '' : s.kind==='SMC CHoCH' ? 'CHoCH ' : s.kind==='VP retest' ? 'VP ' : s.kind==='S&D' ? 'S&D ' : s.kind==='TPC' ? '' : 'S/R ') + (s.dir===1?'BUY':'SELL')});
   markers.sort((a,b) => a.time-b.time);
 
   // fresh supply / demand zones: nearest 2 on each side
@@ -1986,6 +2162,7 @@ function applyGuards(trades, p){
 // ---------- Walk-forward optimizer ----------
 // Each combination is tuned on the oldest 70% of every pair (in-sample) and judged on the newest 30% it never saw (out-of-sample).
 const OPT_GRID = {rr:[1.5, 2, 2.5, 3], tol:[0.1, 0.2, 0.3, 0.4], slAtr:[0.3, 0.5, 0.8], minConf:[0, 1, 2], adxMin:[0, 18, 25]};
+const TPC_GRID = {rr:[2, 3, 4, 5], cTouches:[2, 3], cPush:[2, 3, 4], cSlBuf:[0.05, 0.1, 0.3], cMaxDay:[1, 2]};
 let OPT_RESULTS = null;
 async function runOptimizer(){
   if (btRunning) return; btRunning = true;
@@ -2001,8 +2178,8 @@ async function runOptimizer(){
     }
     if (!data.length){ $('bt_sum').innerHTML = `<p class="bad">${errs.map(esc).join('<br>') || 'No data.'}</p>`; return; }
     const combos = [];
-    for (const rr of OPT_GRID.rr) for (const tol of OPT_GRID.tol) for (const slAtr of OPT_GRID.slAtr)
-      for (const minConf of OPT_GRID.minConf) for (const adxMin of OPT_GRID.adxMin) combos.push({rr, tol, slAtr, minConf, adxMin});
+    for (const rr of TPC_GRID.rr) for (const cTouches of TPC_GRID.cTouches) for (const cPush of TPC_GRID.cPush)
+      for (const cSlBuf of TPC_GRID.cSlBuf) for (const cMaxDay of TPC_GRID.cMaxDay) combos.push({rr, cTouches, cPush, cSlBuf, cMaxDay});
     const evalCombo = combo => {
       const p2 = {...S.p, ...combo}, is = [], oos = [];
       for (const d of data){
@@ -2026,7 +2203,7 @@ async function runOptimizer(){
     const ranked = res.filter(x => x.is.n >= minTrades).sort((a, b) => (b.is.avg - a.is.avg) || (b.is.pf - a.is.pf)).slice(0, 10);
     OPT_RESULTS = ranked;
     const row = (x, label, apply) => `<tr><td>${label}</td>
-      <td class="muted">R:R ${x.combo.rr ?? S.p.rr} · tol ${x.combo.tol ?? S.p.tol} · SL ${x.combo.slAtr ?? S.p.slAtr} · conf ≥${x.combo.minConf ?? S.p.minConf} · ADX ≥${x.combo.adxMin ?? S.p.adxMin}</td>
+      <td class="muted">1:${x.combo.rr ?? S.p.rr} · TL ${x.combo.cTouches ?? S.p.cTouches}+ · push ${x.combo.cPush ?? S.p.cPush} · SL +${x.combo.cSlBuf ?? S.p.cSlBuf} ATR · ${x.combo.cMaxDay ?? S.p.cMaxDay}/day</td>
       <td>${x.is.n}</td><td>${pct(x.is.win)}</td><td class="${x.is.avg >= 0 ? 'good' : 'bad'}">${sgn(x.is.avg)}</td><td>${pfTxt(x.is.pf)}</td>
       <td>${x.oos.n}</td><td>${x.oos.n ? pct(x.oos.win) : '–'}</td><td class="${x.oos.avg >= 0 ? 'good' : 'bad'}"><b>${x.oos.n ? sgn(x.oos.avg) : '–'}</b></td><td>${x.oos.n ? pfTxt(x.oos.pf) : '–'}</td>
       <td>${apply}</td></tr>`;
@@ -2091,14 +2268,14 @@ async function runBacktest(){
       ${tile('Buys won', st.longs.n ? `${st.longs.w}/${st.longs.n}` : '–')}
       ${tile('Sells won', st.shorts.n ? `${st.shorts.w}/${st.shorts.n}` : '–')}
       ${tile('Avg time in trade', st.avgBars.toFixed(0) + ' candles')}
-      ${['SMC','SMC CHoCH','S/R bounce','S/R flip','VP retest','S&D'].map(k => { const x = all.filter(t => t.kind === k); if (!x.length || p.strategy === 'smc') return '';
+      ${['SMC','SMC CHoCH','S/R bounce','S/R flip','VP retest','S&D'].map(k => { const x = all.filter(t => t.kind === k); if (!x.length || p.strategy === 'smc' || p.strategy === 'tpc') return '';
         const net = x.reduce((a,t) => a + t.R, 0); return tile(`${k}: won ${x.filter(t => t.outcome==='win').length}/${x.length}`, sgn(net) + 'R', net >= 0 ? 'good' : 'bad'); }).join('')}
     </div>
     <p class="muted" style="margin:0">${p.tpMulti ? `Exits: ${p.split} at TP1 (${p.tp1R}R) / TP2 (strategy target) / TP3 (${p.tp3Mode === 'liq' ? 'next liquidity, else ' + p.tp3R + 'R' : p.tp3R + 'R'})${p.be ? ', stop to break-even after TP1' : ''}. A trade counts as a win once TP1 is hit.` : p.strategy==='sr' && p.tpMode==='zone' ? 'Targets are the next S/R level, so reward varies per trade.' : `At 1:${p.rr} R:R with ${cost}R costs you need a win rate above ${pct(be)} to make money.`}
       ${open ? `${open} trade${open>1?'s':''} still open at the end were left out.` : ''}
       ${guard.skipped.total ? `Risk guards skipped ${guard.skipped.total} trade${guard.skipped.total > 1 ? 's' : ''} (already in that pair or a correlated one: ${guard.skipped.corr}, max open: ${guard.skipped.max}, daily loss limit: ${guard.skipped.daily}).` : ''}
       ${p.ltfConfirm ? `LTF confirmation: lower-timeframe data starts ${ltfFrom ? fmtTime(ltfFrom) : '(none)'}; earlier signals can't be confirmed and are not counted.` : ''}
-      Return is simple (not compounded). Strategy: ${STRAT[p.strategy]}. SMC entry zone: ${p.poi}${p.choch ? ' + CHoCH' : ''}, min confluence ${p.minConf}${(p.req||[]).length ? ', required: ' + p.req.join(', ') : ''}. Settings: ${p.smcMode === "fast" ? "fast SMC (current leg, internal swing " + p.intSwing + ")" : esc(p.trend) + " trend"}, HTF ${p.useHtf ? S.htf : 'off'}, swing ${p.swing}, tolerance ${p.tol}×ATR, SL buffer ${p.slAtr}×ATR.</p>
+      Return is simple (not compounded). Strategy: ${STRAT[p.strategy]}.${p.strategy === 'tpc' ? ` Session ${(SESSIONS[p.cSession] || SESSIONS.ny).name}, EMA ${p.cEma}, trendline ${p.cTouches}+ touches, push ${p.cPush} candles, max ${p.cMaxDay} trade${p.cMaxDay > 1 ? 's' : ''}/day, target 1:${p.rr}, SL ${p.cSlBuf}×ATR past the swing.</p><p class="muted" style="display:none">` : ''} SMC entry zone: ${p.poi}${p.choch ? ' + CHoCH' : ''}, min confluence ${p.minConf}${(p.req||[]).length ? ', required: ' + p.req.join(', ') : ''}. Settings: ${p.smcMode === "fast" ? "fast SMC (current leg, internal swing " + p.intSwing + ")" : esc(p.trend) + " trend"}, HTF ${p.useHtf ? S.htf : 'off'}, swing ${p.swing}, tolerance ${p.tol}×ATR, SL buffer ${p.slAtr}×ATR.</p>
     ${errs.length ? `<p class="bad">${errs.map(esc).join('<br>')}</p>` : ''}
     ${S.source==='demo' ? '<p class="bad" style="margin:8px 0 0"><b>Demo data is made up and much trendier than real markets. Ignore these numbers and switch to Binance or Twelve Data for a real test.</b></p>' : ''}`;
 
@@ -2154,7 +2331,7 @@ async function runBacktest(){
 
 // ======================= UI wiring =======================
 const curSymbol = () => S.symbol[S.source] || '';
-const STRAT = {smc:'SMC BOS + retest', sr:'Support & Resistance', vp:'Volume profile', sd:'Supply & Demand', both:'SMC + S/R', all:'All strategies'};
+const STRAT = {tpc:'Take Profit Carlos', smc:'SMC BOS + retest', sr:'Support & Resistance', vp:'Volume profile', sd:'Supply & Demand', both:'SMC + S/R', all:'All strategies'};
 function setStatus(t){ $('status').textContent = t; }
 function toast(msg){
   const box = $('toast'), d = document.createElement('div'); d.textContent = msg; d.setAttribute('role', 'status');
@@ -2486,7 +2663,7 @@ const F = [['s_sdbase','sdBase',Number],['s_sddep','sdDep',Number],['s_sdmove','
   ['s_corr','corr',v=>v==='1'],['s_maxopenbt','maxOpenBt',Number],['s_dayloss','dailyLossR',Number],
   ['s_tpmulti','tpMulti',v=>v==='1'],['s_tp1r','tp1R',Number],['s_tp3mode','tp3Mode',String],['s_tp3r','tp3R',Number],
   ['s_split','split',String],['s_be','be',v=>v==='1'],['s_annot','view',String],['s_poi','poi',String],['s_choch','choch',v=>v==='1'],['s_disp','dispAtr',Number],['s_session','session',String],['s_minconf','minConf',Number],
-  ['s_strategy','strategy',String],['s_srtouch','srTouches',Number],['s_zonew','zoneW',Number],['s_srlook','srLook',Number],
+  ['s_strategy','strategy',String],['c_session','cSession',String],['c_ema','cEma',Number],['c_chop','cChop',Number],['c_touch','cTouches',Number],['c_swing','cSwing',Number],['c_push','cPush',Number],['c_disp','cDisp',Number],['c_window','cWindow',Number],['c_valid','cValid',Number],['c_maxday','cMaxDay',Number],['c_slbuf','cSlBuf',Number],['s_srtouch','srTouches',Number],['s_zonew','zoneW',Number],['s_srlook','srLook',Number],
   ['s_srtrend','srTrend',String],['s_tpmode','tpMode',String],['s_minrr','minRR',Number],['s_swing','swing',Number],['s_trend','trend',String],['s_ema','ema',Number],['s_htfema','htfEma',Number],
   ['s_usehtf','useHtf',v=>v==='1'],['s_tol','tol',Number],['s_maxr','maxRetest',Number],['s_rej','rej',v=>v==='1'],
   ['s_sl','slAtr',Number],['s_rr','rr',Number],['s_fresh','fresh',Number],['s_closed','closed',v=>v==='1']];
@@ -2511,7 +2688,7 @@ $('cfg_make').onclick = () => {
   if (!key){ toast('Paste your Twelve Data key in the field above first.'); return; }
   const cfg = {twelveDataKey: key, defaultSource: 'twelvedata'};
   if ($('cfg_what').value === 'all' && tgToken()) cfg.telegram = {botToken: tgToken(), chat: tgChat()};
-  const text = `// Built-in keys for the SMC + S/R Scanner. Upload this file next to index.html.\n// Anyone who opens the site can read these keys. Delete this file to remove them.\nwindow.SMC_CONFIG = ${JSON.stringify(cfg, null, 2)};\n`;
+  const text = `// Built-in keys for the TPC 5M Scanner. Upload this file next to index.html.\n// Anyone who opens the site can read these keys. Delete this file to remove them.\nwindow.SMC_CONFIG = ${JSON.stringify(cfg, null, 2)};\n`;
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([text], {type:'text/javascript'}));
   a.download = 'config.js'; document.body.appendChild(a); a.click();
@@ -2647,7 +2824,7 @@ async function watchTick(){
               w.status = 'at entry';
               watchAlert(w, `⏳ ${w.sym} ${w.tf.toUpperCase()} at entry`, w.type === 'watch'
                 ? `${w.sym}: price is breaking ${fmt(w.entry)}. Watching for the setup to form.`
-                : `${w.sym}: price reached the ${w.dir === 1 ? 'buy' : 'sell'} zone ${fmt(w.entry)}. Waiting for the confirmation candle to close.`);
+                : `${w.sym}: price reached the ${w.dir === 1 ? 'buy' : 'sell'} zone ${fmt(w.entry)}. The FVG is filling: the limit order fills here (stop ${fmt(w.sl)}).`);
             }
           }
         } catch(e){}
@@ -2712,12 +2889,12 @@ function shareButtons(what){
 }
 // Normalised trade description from a forecast plan or from a fired signal
 function fromPlan(p){
-  return {dir:p.dir, entry:p.entry, sl:p.sl, tps:p.tps || [p.tp], kind: p.kind === 'sr' ? 'Support & resistance' : p.kind === 'vp' ? 'Volume profile retest' : p.kind === 'sd' ? 'Supply & demand zone' : p.choch ? 'SMC CHoCH' : 'SMC BOS + retest',
+  return {dir:p.dir, entry:p.entry, sl:p.sl, tps:p.tps || [p.tp], kind: p.kind === 'tpc' ? 'Take Profit Carlos · FVG fill' : p.kind === 'sr' ? 'Support & resistance' : p.kind === 'vp' ? 'Volume profile retest' : p.kind === 'sd' ? 'Supply & demand zone' : p.choch ? 'SMC CHoCH' : 'SMC BOS + retest',
     state: p.type === 'active' ? 'Running' : p.type === 'limit' ? 'Limit order (wait for the retest)' : 'Pending: only if structure breaks',
     trigger: p.trigger, gates: p.gates, trail: p.tps && p.tps.trail, hits: p.hits || 0};
 }
 function fromSignal(s){
-  return {dir:s.dir, entry:s.entry, sl:s.sl, tps:s.tps || [s.tp], kind: s.kind === 'SMC' ? 'SMC BOS + retest' : s.kind,
+  return {dir:s.dir, entry:s.entry, sl:s.sl, tps:s.tps || [s.tp], kind: s.kind === 'SMC' ? 'SMC BOS + retest' : s.kind === 'TPC' ? 'Take Profit Carlos · FVG fill' : s.kind,
     state:'Market entry', conf:s.conf, score:s.score, t:s.t, trail: s.tps && s.tps.trail, hits: s.hits || 0};
 }
 function signalLines(sym, tf, x){
@@ -2807,7 +2984,7 @@ $('t_find').onclick = async () => {
   } catch(e){ toast('Telegram: ' + e.message); }
 };
 $('t_test').onclick = () => { readTgForm(); if (!tgToken() || !tgChat()){ toast('Add the bot token and the group first.'); return; }
-  tgSend(['✅ SMC + S/R Scanner connected', 'Signals from the app will appear here.'], false); };
+  tgSend(['✅ TPC 5M Scanner connected', 'Signals from the app will appear here.'], false); };
 
 // ======================= News filter =======================
 // High-impact events from a free public economic calendar (this week only), refreshed hourly.
