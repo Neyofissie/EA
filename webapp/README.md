@@ -239,3 +239,17 @@ Back-test on many candles (5 000+): with one trade per day in a 3-hour window, 1
 The prop-firm "$50 plan" and the morning routine are discipline rules, not something the scanner can check.
 
 ![Take Profit Carlos setup](tpc-strategy.png)
+
+## Day-trader tools (ideas ported from the MIT-licensed day-trader-skill)
+
+- **Time Machine** (Setup panel): replays the next 60 candles 10 000 times from the entry, drawing each candle from this market's own candles at the same time of day, scaled to price. Shows TP2 first / stop first / still open, TP1 touched, and a verdict (R per trade). Repeatable seed. Settings: on/off, replays, candles ahead.
+- **Position size**: lots that keep the loss at the stop under your **max loss per trade ($)**. Contract sizes are approximate (forex 100 000 units, gold 100 oz, index CFDs $1 a point); set your broker's in Settings, e.g. `US30=1, XAU/USD=100`.
+- **Risk check: PASS / BLOCK** with the reason: min reward:risk (1:2), trades today, daily loss limit in R, news, whether 0.01 lot already exceeds your max loss; kill zone and Time Machine show as warnings. MT5 auto-trading skips trades the check blocks. Telegram signals include the verdict, Time Machine odds and size.
+- **MT5 sizing by fixed $**: Account → Size trades by "Fixed $ loss at the stop" (uses the broker's own contract specs).
+- **Opening-range breakout** (Strategy menu): range = first 15 min after 09:30 New York; trade the first close outside it within 2 hours; stop at the range midpoint (or far side); target 1:2; one per day; flat by 15:55 New York.
+- **Alerts while a trade runs**: a watched setup that triggers now rings on TP1/TP2/TP3, the stop (or break-even), and flat-by-the-close. **Price alerts**: type a price under "Watched setups".
+- **News today**: the day's high-impact events for the pair's currencies (US30 uses USD) under News.
+
+Not ported: the earnings analyst and Congress-trade tracker (US single stocks only), and the stock scanner over thousands of tickers (this app scans your watchlist).
+
+![Time Machine and risk check](time-machine-risk.png)

@@ -319,7 +319,7 @@ button.mini{padding:3px 8px;font-size:12px;min-height:0}
       <span id="srcLabel">Server</span><i class="srcdot" id="srcDot"></i><span aria-hidden="true">▾</span></button>
     <div class="tfs" id="tfs"></div>
     <label class="muted chip-l">HTF <select id="htf"></select></label>
-    <select id="strategy" title="Strategy" aria-label="Strategy"><option value="tpc">Take Profit Carlos</option></select>
+    <select id="strategy" title="Strategy" aria-label="Strategy"><option value="tpc">Take Profit Carlos</option><option value="orb">Opening-range breakout</option></select>
     <select id="source" title="Data source" aria-label="Data source" hidden>
       <option value="binance">Crypto (Binance)</option>
       <option value="twelvedata">Forex / Gold / Indices (Twelve Data)</option>
@@ -398,6 +398,7 @@ button.mini{padding:3px 8px;font-size:12px;min-height:0}
     </div>
     <div class="card c-watched">
       <h2>Watched setups <span class="r muted" id="wsCount"></span></h2>
+      <div class="palert" style="display:flex;gap:6px;padding:8px 12px 0"><input id="pa_price" inputmode="decimal" placeholder="Price alert for this chart" style="flex:1;min-width:0" aria-label="Alert price"><button type="button" id="pa_add">Add alert</button></div>
       <div id="wsList" class="wslist"><p class="muted" style="margin:0;padding:12px;font-size:13px">Tap 🔔 on a setup in the Forecast to get notified the moment it reaches its entry and when it triggers.</p></div>
     </div>
     <div class="card c-watch">
@@ -456,7 +457,7 @@ button.mini{padding:3px 8px;font-size:12px;min-height:0}
     <label class="full">Twelve Data API key (free at twelvedata.com — needed for forex/gold)
       <input id="s_tdkey" type="password" autocomplete="off"></label>
     <div class="full muted" id="cfgState" style="font-size:12px"></div>
-    <div hidden style="display:none"><select id="s_strategy"><option value="tpc">Take Profit Carlos</option></select><input id="s_swing" type="number" min="1"></div>
+    <div hidden style="display:none"><select id="s_strategy"><option value="tpc">Take Profit Carlos</option><option value="orb">Opening-range breakout</option></select><input id="s_swing" type="number" min="1"></div>
     <div class="full" style="border-top:1px solid var(--line);padding-top:10px;color:var(--text);font-weight:600">Strategy rules · Take Profit Carlos (5M)</div>
     <div class="full muted" style="font-size:12px">Trendline (3+ bounces) breaks → BOS → institutional push (3+ same-colour or 2 big candles) → first FVG of the push makes the zone (FVG to the swing). Enter when price comes back and <b>completely fills the FVG</b>, stop just past the swing, 1:2 minimum, aim 1:3–1:5. Only inside the session kill zone, only when the 13 EMA is clean.</div>
     <label>Session kill zone (New York time)<select id="c_session"><option value="ny">New York 07:00–10:00</option><option value="london">London 02:00–05:00</option><option value="asia">Asia 20:00–00:00</option></select></label>
@@ -471,6 +472,22 @@ button.mini{padding:3px 8px;font-size:12px;min-height:0}
     <label>Max trades per day<input id="c_maxday" type="number" min="1" max="5"></label>
     <label>SL buffer past the swing (× ATR)<input id="c_slbuf" type="number" step="0.05" min="0"></label>
     <label>Target R:R (TP2)<input id="s_rr" type="number" step="0.5" min="2"></label>
+    <div class="full" style="border-top:1px solid var(--line);padding-top:10px;color:var(--text);font-weight:600">Opening-range breakout (second strategy)</div>
+    <div class="full muted" style="font-size:12px">Pick it in the Strategy menu at the top. The range is the first N minutes after the open; the trade is the first candle that closes outside it. One trade a day, flat by the close.</div>
+    <label>Open (New York time, HH:MM)<input id="o_open" placeholder="09:30"></label>
+    <label>Range length (minutes)<input id="o_min" type="number" min="5" step="5"></label>
+    <label>Breakout must come within (minutes)<input id="o_win" type="number" min="5" step="5"></label>
+    <label>Stop<select id="o_stop"><option value="mid">Range midpoint</option><option value="far">Other side of the range</option></select></label>
+    <label>Target R:R<input id="o_rr" type="number" min="0.5" step="0.5"></label>
+    <label>Flat by (New York time, empty = off)<input id="o_flat" placeholder="15:55"></label>
+    <div class="full" style="border-top:1px solid var(--line);padding-top:10px;color:var(--text);font-weight:600">Budget, risk check and Time Machine</div>
+    <label>Max loss per trade ($)<input id="g_maxloss" type="number" min="1"></label>
+    <label>Account size ($)<input id="g_acct" type="number" min="0"></label>
+    <label>Risk check: min reward : risk<input id="g_minrr" type="number" step="0.5" min="0.5"></label>
+    <label>Risk check: daily loss limit (R, 0 = off)<input id="g_dayloss" type="number" step="0.5" min="0"></label>
+    <label class="full">$ per 1.00 price move for 1 lot (your broker's contract sizes)<input id="g_lotmap" placeholder="US30=1, XAU/USD=100"></label>
+    <label>Time Machine<select id="g_tm"><option value="1">On</option><option value="0">Off</option></select></label>
+    <label>Replays · candles ahead<span style="display:flex;gap:6px"><input id="g_tmruns" type="number" min="500" step="500" style="width:50%"><input id="g_tmbars" type="number" min="5" style="width:50%"></span></label>
     <div class="full" style="border-top:1px solid var(--line);padding-top:10px;color:var(--text);font-weight:600">Build keys into the app</div>
     <div class="full muted" style="font-size:12px">Saves you typing keys on every phone and computer. Press the button, put the downloaded <b>config.js</b> into the app folder next to index.html, and upload the folder to Netlify again.
       <b>Anyone who opens your site can read keys built into it.</b> Only do this if you keep the link private. If a key leaks, make a new one (Twelve Data dashboard / @BotFather <b>/revoke</b>). Your MT5 login and MetaApi token are never included.</div>
@@ -599,7 +616,9 @@ button.mini{padding:3px 8px;font-size:12px;min-height:0}
     <label>Name for this account<input id="b_name" placeholder="e.g. My demo"></label>
     <div class="full" style="border-top:1px solid var(--line);padding-top:10px;color:var(--text);font-weight:600">Auto-trading</div>
     <label>Auto-trade new signals<select id="b_auto"><option value="0">Off (manual button only)</option><option value="1">On</option></select></label>
+    <label>Size trades by<select id="b_riskmode"><option value="pct">% of balance</option><option value="usd">Fixed $ loss at the stop</option></select></label>
     <label>Risk per trade (% of balance)<input id="b_risk" type="number" step="0.1" min="0.05"></label>
+    <label>Max loss per trade ($)<input id="b_riskusd" type="number" step="1" min="1"></label>
     <label>Max open trades<input id="b_max" type="number" min="1"></label>
     <label>Daily loss limit (% of the day's starting balance, 0 = off)<input id="b_dayloss" type="number" step="0.5" min="0"></label>
     <label>Broker symbol suffix (e.g. .m, .raw)<input id="b_suffix" autocomplete="off"></label>
@@ -642,10 +661,10 @@ const CONF_LABEL = {OB:'Order block', FVG:'Fair value gap', Sweep:'Liquidity swe
 const DEFAULTS = {
   source:'binance', symbol:{binance:'BTCUSDT', twelvedata:'EUR/USD', demo:'DEMO-1'},
   tf:'15m', htf:'4h', auto:'0', tdkey:'', binPref:'auto',
-  watched:[],
+  watched:[], palerts:[],
   tg:{token:'', chat:'', auto:false, setups:false, footer:'Not financial advice. Trade at your own risk.'},
-  broker:{token:'', remember:true, accountId:'', auto:false, risk:0.5, maxOpen:3, dayLossPct:3, day:null, magic:240521, suffix:'', map:'', managed:[]},
-  p:{cSession:'ny', cEma:13, cChop:4, cSwing:3, cTouches:3, cPush:3, cDisp:2.0, cValid:36, cMaxDay:1, cSlBuf:0.1, cWindow:30, sdBase:1.0, sdDep:2.0, sdMove:1.2, sdTouches:1, sdLook:300, sdTrend:'trend', vpLook:120, vpLag:10, vpBins:48, vpVA:70, vpAdx:25, vpShow:true, mtfOn:true, alertMtf:false, mtfWatchTD:false, alertBasis:'rr', alertRR:2, alertOn:true, alertMin:50, alertMinN:8, alertGateTrades:true, smcMode:'fast', intSwing:2, htfMode:'ema', htfPd:false, adxMin:0, volLo:0, volHi:0, ltfConfirm:false, news:true, newsBefore:30, newsAfter:30, corr:true, dailyLossR:3, maxOpenBt:3, tpMulti:true, tp1R:2, tp3Mode:'rr', tp3R:5, split:'50/30/20', be:true, view:'clean', poi:'level', choch:false, dispAtr:1.0, session:'both', minConf:0, req:[], strategy:'tpc', srTouches:2, zoneW:0.5, srLook:300, tpMode:'zone', minRR:1.5, srTrend:'trend', swing:5, trend:'EMA + Structure', ema:200, htfEma:50, useHtf:false, tol:0.25, maxRetest:20, rej:true, slAtr:0.5, rr:3, fresh:5, closed:true},
+  broker:{token:'', remember:true, accountId:'', auto:false, riskMode:'pct', riskUsd:50, risk:0.5, maxOpen:3, dayLossPct:3, day:null, magic:240521, suffix:'', map:'', managed:[]},
+  p:{orbOpen:'09:30', orbMin:15, orbWindow:120, orbStop:'mid', orbRR:2, orbFlat:'15:55', tmOn:true, tmRuns:10000, tmBars:60, maxLoss:50, acct:5000, minTradeRR:2, lotMap:'US30=1, NAS100=1, SPX500=1, XAU/USD=100, XAG/USD=5000', cSession:'ny', cEma:13, cChop:4, cSwing:3, cTouches:3, cPush:3, cDisp:2.0, cValid:36, cMaxDay:1, cSlBuf:0.1, cWindow:30, sdBase:1.0, sdDep:2.0, sdMove:1.2, sdTouches:1, sdLook:300, sdTrend:'trend', vpLook:120, vpLag:10, vpBins:48, vpVA:70, vpAdx:25, vpShow:true, mtfOn:true, alertMtf:false, mtfWatchTD:false, alertBasis:'rr', alertRR:2, alertOn:true, alertMin:50, alertMinN:8, alertGateTrades:true, smcMode:'fast', intSwing:2, htfMode:'ema', htfPd:false, adxMin:0, volLo:0, volHi:0, ltfConfirm:false, news:true, newsBefore:30, newsAfter:30, corr:true, dailyLossR:3, maxOpenBt:3, tpMulti:true, tp1R:2, tp3Mode:'rr', tp3R:5, split:'50/30/20', be:true, view:'clean', poi:'level', choch:false, dispAtr:1.0, session:'both', minConf:0, req:[], strategy:'tpc', srTouches:2, zoneW:0.5, srLook:300, tpMode:'zone', minRR:1.5, srTrend:'trend', swing:5, trend:'EMA + Structure', ema:200, htfEma:50, useHtf:false, tol:0.25, maxRetest:20, rej:true, slAtr:0.5, rr:3, fresh:5, closed:true},
   wl:{
     binance:['BTCUSDT','ETHUSDT','SOLUSDT','BNBUSDT','XRPUSDT','ADAUSDT','DOGEUSDT','AVAXUSDT'],
     twelvedata:['US30 mini','EUR/USD','GBP/USD','USD/JPY','AUD/USD','USD/CAD','GBP/JPY','EUR/JPY','XAU/USD','NAS100'],
@@ -675,7 +694,7 @@ try { if (!localStorage.getItem('smc-scanner') && CFG.defaultSource) S.source = 
 if ((S.v || 0) < 2){ if (S.p.alertMin === 70) S.p.alertMin = 50; S.v = 2; try { localStorage.setItem('smc-scanner', JSON.stringify(S)); } catch(e){} }
 // v3: the app runs one strategy, Take Profit Carlos, on 5M with 1:2 / 1:3 / 1:5 targets
 if ((S.v || 0) < 3){ Object.assign(S.p, {strategy:'tpc', useHtf:false, htfPd:false, adxMin:0, ltfConfirm:false, rr:3, tp1R:2, tp3Mode:'rr', tp3R:5, tpMulti:true, be:true}); S.tf = '5m'; S.v = 3; try { localStorage.setItem('smc-scanner', JSON.stringify(S)); } catch(e){} }
-S.p.strategy = 'tpc';
+if (!['tpc', 'orb'].includes(S.p.strategy)) S.p.strategy = 'tpc';
 // v5: Dow Jones as "US30 mini" (the broker's mini-sized DJIA contract) at the top of the watchlist
 if ((S.v || 0) < 5){ const w = S.wl.twelvedata = (S.wl.twelvedata || []).filter(x => !/^US30( ?MINI)?$/i.test(x.trim())); w.unshift('US30 mini');
   if (/^US30$/i.test(S.symbol.twelvedata || '')) S.symbol.twelvedata = 'US30 mini';
@@ -1046,7 +1065,8 @@ function analyze(cs, p, htfBias, ctx = {}){
   const sr = useSr ? srScan(cs, p, atr, trendArr, htfBias) : {zones:[], signals:[], plan:null};
   const vp = useVp ? vpScan(cs, p, atr, htfBias) : {signals:[], plan:null, profile:null};
   const useSd = ['sd', 'all'].includes(p.strategy);
-  const useTpc = p.strategy === 'tpc';
+  const useTpc = p.strategy === 'tpc', useOrb = p.strategy === 'orb';
+  const orb = useOrb ? orbScan(cs, p, atr, htfBias, ctx && ctx.tfMs || (cs.length > 1 ? cs[1].t - cs[0].t : 300e3)) : {signals:[], plan:null};
   const tpc = useTpc ? tpcScan(cs, p, atr, htfBias) : {signals:[], plan:null};
   const sd = useSd ? sdScan(cs, p, atr, trendArr, htfBias) : {signals:[], plan:null, zones:[]};
   // ----- quality filters -----
@@ -1106,7 +1126,7 @@ function analyze(cs, p, htfBias, ctx = {}){
     }
     return true;
   };
-  const good = (useSmc ? signals : []).concat(sr.signals, vp.signals, sd.signals, tpc.signals)
+  const good = (useSmc ? signals : []).concat(sr.signals, vp.signals, sd.signals, tpc.signals, orb.signals)
     .filter(passes).sort((a,b) => a.i - b.i);
   for (const s of good) s.rWin = Math.abs(s.tp - s.entry) / Math.abs(s.entry - s.sl);
   const last = good[good.length-1] || null;
@@ -1153,6 +1173,7 @@ function analyze(cs, p, htfBias, ctx = {}){
         if (sw !== null){ const t = sw - d*0.1*atr[k-1]; if (d === 1 ? t > stop && t < c.o : t < stop && t > c.o) stop = t; }
       }
       if (d===1 ? c.l <= stop : c.h >= stop){ R += rem*d*(stop - s.entry)/risk; rem = 0; s.exitI = k; break; }
+      if (s.flatT && c.t >= s.flatT){ R += rem*d*(c.o - s.entry)/risk; rem = 0; s.exitI = k; s.flat = true; break; }   // flat by the close
       while (hits < 3 && (d===1 ? c.h >= tps[hits] : c.l <= tps[hits])){
         R += parts[hits]*Math.abs(tps[hits] - s.entry)/risk; rem -= parts[hits]; hits++;
         if (hits === 1 && p.be && p.tpMulti) stop = s.entry;
@@ -1160,7 +1181,7 @@ function analyze(cs, p, htfBias, ctx = {}){
       if (rem <= 1e-9){ s.exitI = k; break; }
     }
     s.hits = hits;
-    if (rem <= 1e-9){ s.R = R; s.outcome = hits >= 1 ? 'win' : 'loss'; }
+    if (rem <= 1e-9){ s.R = R; s.outcome = hits >= 1 || (s.flat && R > 0) ? 'win' : 'loss'; }
     else { s.R = null; }
     // "reached N R": price travelled N × risk in the trade's favour before touching the ORIGINAL stop
     const goal = s.entry + d*(p.alertRR || 2)*risk;
@@ -1210,6 +1231,8 @@ function analyze(cs, p, htfBias, ctx = {}){
     plan = sr.plan;
   else if (tpc.plan)
     plan = tpc.plan;
+  else if (orb.plan)
+    plan = orb.plan;
   else if (sd.plan)
     plan = sd.plan;
   else if (vp.plan)
@@ -1229,7 +1252,8 @@ function analyze(cs, p, htfBias, ctx = {}){
   if (plan && plan.hits === undefined) plan.hits = 0;
 
   return {
-    tpc: useTpc ? tpc : null, vp: vp.profile, sdZones: sd.zones, ema: useTpc ? tpc.e13 : ema, bos: useSmc ? bos : [], zones: sr.zones, pivots, sweeps, signals:good, trendDir, state: useSmc && pend ? pend.dir : 0,
+    _cs: cs, _tfMs: (ctx && ctx.tfMs) || 0,
+    orb: useOrb ? orb : null, tpc: useTpc ? tpc : null, vp: vp.profile, sdZones: sd.zones, ema: useTpc ? tpc.e13 : ema, bos: useSmc ? bos : [], zones: sr.zones, pivots, sweeps, signals:good, trendDir, state: useSmc && pend ? pend.dir : 0,
     level: useSmc && pend ? pend.lvl : null, htf: htfNow,
     last, lastAgo: last ? n-1-last.i : null, price: close, plan, stats, loAt, hiAt,
     ltfStart: p.ltfConfirm ? ltfStart : null,
@@ -1319,6 +1343,133 @@ function srScan(cs, p, atr, trendArr, htfBias){
   }
   const out = zones.filter(strong).map(z => { const [zb, zt] = band(z, i); return {zb, zt, touches:z.touches, first:z.first}; });
   return {zones: out, signals, plan};
+}
+
+// ---------- Opening-range breakout (ORB): first close beyond the opening range, stop at the range midpoint, flat by the close ----------
+const hhmm = x => { const m = String(x || '').match(/^(\d{1,2}):(\d{2})$/); return m ? +m[1] + (+m[2])/60 : null; };
+function orbScan(cs, p, atr, htfBias, tfMs){
+  const n = cs.length, signals = [], open = hhmm(p.orbOpen) ?? 9.5, rEnd = open + p.orbMin/60, wEnd = rEnd + p.orbWindow/60, flat = hhmm(p.orbFlat);
+  const clock = cs.map(c => nyClock(c.t));
+  const day = {};                          // per NY day: {hi, lo, done}
+  if (tfMs > p.orbMin*60e3) return {signals, plan:null, range:null, note:`Opening range needs a ${p.orbMin}m or smaller chart`};
+  let cur = null;
+  for (let i = 0; i < n; i++){
+    const c = cs[i], k = clock[i], h = k.h;
+    if (!day[k.day]) day[k.day] = {hi:-Infinity, lo:Infinity, from:-1, to:-1, done:false, day:k.day};
+    const D = day[k.day]; cur = D;
+    if (h >= open && h < rEnd){ D.hi = Math.max(D.hi, c.h); D.lo = Math.min(D.lo, c.l); if (D.from < 0) D.from = i; D.to = i; continue; }
+    if (D.done || D.from < 0 || h < rEnd || h >= wEnd) continue;
+    const d = c.c > D.hi ? 1 : c.c < D.lo ? -1 : 0;
+    if (!d) continue;
+    D.done = true;
+    const mid = (D.hi + D.lo)/2, sl = p.orbStop === 'far' ? (d === 1 ? D.lo : D.hi) : mid;
+    if (Math.abs(c.c - sl) < 1e-12) continue;
+    let flatT = null;
+    if (flat !== null && flat > h) flatT = c.t + (flat - h)*3600e3;
+    signals.push({i, t:c.t, dir:d, entry:c.c, sl, tp:c.c + d*p.orbRR*Math.abs(c.c - sl), level: d === 1 ? D.hi : D.lo, htf:htfBias[i], kind:'ORB', flatT, range:{hi:D.hi, lo:D.lo, from:D.from, to:D.to}});
+  }
+  // plan for today: range built, no breakout yet, window still open
+  let plan = null; const i = n - 1, hNow = clock[i].h;
+  const range = cur && cur.from >= 0 && cur.day === clock[i].day ? {hi:cur.hi, lo:cur.lo, from:cur.from, to:cur.to, done:cur.done, building: hNow < rEnd} : null;
+  if (range && !range.done && !range.building && hNow < wEnd){
+    const mid = (range.hi + range.lo)/2, d = cs[i].c >= mid ? 1 : -1, trig = d === 1 ? range.hi : range.lo;
+    const sl = p.orbStop === 'far' ? (d === 1 ? range.lo : range.hi) : mid;
+    plan = {dir:d, type:'watch', kind:'orb', entry:trig, trigger:trig, sl, tp: trig + d*p.orbRR*Math.abs(trig - sl), tol:0, htfOk:true, range};
+  }
+  return {signals, plan, range};
+}
+
+// ---------- Time Machine: replay the next candles thousands of times from this market's own candles at the same time of day ----------
+function mulberry(seed){ return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const TM_CACHE = new Map();
+const tmOf = r => { if (!S.p.tmOn || !r || !r.plan || !r._cs) return null; if (r.tm === undefined) r.tm = timeMachine(r._cs, r.plan, r._tfMs || 300e3, {runs:S.p.tmRuns, bars:S.p.tmBars}); return r.tm; };
+function timeMachine(cs, plan, tfMs, opt = {}){
+  const runs = opt.runs || 10000, H = opt.bars || 60, n = cs.length;
+  if (!plan || n < 100) return null;
+  const key = [cs[n-1].t, plan.dir, plan.entry, plan.sl, (plan.tps || [plan.tp]).join(','), runs, H].join('|');
+  if (TM_CACHE.has(key)) return TM_CACHE.get(key);
+  const day = 86400e3, slots = Math.max(1, Math.round(day / tfMs));
+  const slotOf = t => Math.floor(((t % day) + day) % day / tfMs);
+  // relative candle shapes, grouped by time-of-day slot; scaled to today's volatility
+  const rel = [], bySlot = Array.from({length:slots}, () => []);
+  let a0 = 0; for (let k = Math.max(1, n-100); k < n; k++) a0 += (cs[k].h - cs[k].l)/cs[k].o; a0 /= Math.min(99, n-1);
+  for (let k = 1; k < n; k++){ const c = cs[k], o = cs[k-1].c;
+    const x = {h:(c.h - o)/o, l:(c.l - o)/o, c:(c.c - o)/o}; rel.push(x); bySlot[slotOf(c.t)].push(x); }
+  const pick = (rnd, slot) => { let pool = bySlot[slot];
+    if (pool.length < 5){ pool = []; for (let w = -2; w <= 2; w++) pool = pool.concat(bySlot[(slot + w + slots) % slots]); }
+    if (pool.length < 5) pool = rel; return pool[Math.floor(rnd()*pool.length)]; };
+  const d = plan.dir, E = plan.entry, SL = plan.sl, tps = plan.tps || [plan.tp], T = tps[Math.min(1, tps.length - 1)], T1 = tps[0];
+  let seed = 19; for (const ch of key) seed = (seed*31 + ch.charCodeAt(0)) | 0;
+  const rnd = mulberry(seed), t0 = cs[n-1].t;
+  let tgt = 0, stop = 0, open = 0, tp1 = 0;
+  for (let r = 0; r < runs; r++){
+    let P = E, hitT1 = false, res = 0;
+    for (let k = 1; k <= H; k++){
+      const x = pick(rnd, slotOf(t0 + k*tfMs)), hi = P*(1 + x.h), lo = P*(1 + x.l);
+      if (d === 1 ? lo <= SL : hi >= SL){ res = -1; break; }               // stop first when both are inside one candle
+      if (!hitT1 && (d === 1 ? hi >= T1 : lo <= T1)) hitT1 = true;
+      if (d === 1 ? hi >= T : lo <= T){ res = 1; break; }
+      P = P*(1 + x.c);
+    }
+    if (res === 1) tgt++; else if (res === -1) stop++; else open++;
+    if (hitT1) tp1++;
+  }
+  const rr = Math.abs(T - E)/Math.abs(E - SL);
+  const out = {runs, bars:H, tgt:tgt/runs, stop:stop/runs, open:open/runs, tp1:tp1/runs, rr, seed: Math.abs(seed) % 100000};
+  out.ev = out.tgt*rr - out.stop;                                         // R per trade, ignoring the ones still open
+  out.verdict = out.ev > 0.15 ? 'odds in your favour' : out.ev < -0.15 ? 'odds against you' : 'close to a coin flip';
+  if (TM_CACHE.size > 50) TM_CACHE.clear();
+  TM_CACHE.set(key, out);
+  return out;
+}
+
+// ---------- Budget: how big a position keeps the loss at the stop under your max loss ----------
+// Value of a 1.00 price move for 1.00 lot, in USD. Approximate for crosses; MT5 auto-trading uses the broker's own contract specs.
+const QUOTE_USD = {USD:1, EUR:1.08, GBP:1.27, AUD:0.66, NZD:0.6, CAD:0.73, CHF:1.12, JPY:1/150};
+function contractValue(sym, price){
+  const up = String(sym).toUpperCase().replace(/\s+/g, '');
+  for (const part of String(S.p.lotMap || '').split(/[,\n]/)){
+    const [a, b] = part.split('=').map(x => (x || '').trim().toUpperCase().replace(/\s+/g, ''));
+    if (a && b && (a === up || (idxOf(a) && idxOf(up) && idxOf(a) === idxOf(up)))) return {v:+b, how:'your setting'};
+  }
+  if (idxOf(sym)) return {v:1, how:'index CFD, $1 a point per lot (check your broker)'};
+  const lg = legs(sym);
+  if (/^(XAU)/.test(up)) return {v:100, how:'gold, 100 oz a lot'};
+  if (/^(XAG)/.test(up)) return {v:5000, how:'silver, 5 000 oz a lot'};
+  if (lg.length === 2 && QUOTE_USD[lg[1]] && /^[A-Z]{3}$/.test(lg[0]) && !/USDT|BTC|ETH/.test(up)) return {v:100000*QUOTE_USD[lg[1]], how:'forex, 100 000 units a lot'};
+  return {v:1, how:'1 coin / share a lot'};
+}
+function budgetFor(sym, x){
+  if (!x) return null;
+  const risk = Math.abs(x.entry - x.sl), cv = contractValue(sym, x.entry), perLot = risk*cv.v;
+  if (!(perLot > 0)) return null;
+  const step = cv.v >= 1000 || idxOf(sym) || /^X(AU|AG)/i.test(sym) ? 0.01 : 0.001;
+  const lots = Math.floor(S.p.maxLoss/perLot/step + 1e-9)*step;
+  const minLoss = 0.01*perLot;
+  return {lots, loss: lots*perLot, perLot, minLoss, cv, step, pctAcct: S.p.acct ? S.p.maxLoss/S.p.acct : null};
+}
+
+// ---------- Risk manager: PASS or BLOCK, with the reason ----------
+function riskCheck(r, x, sym){
+  if (!x) return null;
+  const rows = [], add = (ok, name, hard = true) => rows.push({ok, name, hard});
+  const tps = x.tps || [x.tp], rr = Math.abs(tps[Math.min(1, tps.length - 1)] - x.entry)/Math.abs(x.entry - x.sl);
+  add(rr >= S.p.minTradeRR - 1e-9, `Reward : risk 1:${rr.toFixed(1)} (min 1:${S.p.minTradeRR})`);
+  const sigs = r.signals || [], today = nyClock(Date.now()).day;
+  const todays = sigs.filter(s => nyClock(s.t).day === today);
+  const maxDay = S.p.strategy === 'tpc' ? S.p.cMaxDay : Math.max(1, S.p.cMaxDay);
+  add(todays.filter(s => s !== x).length < maxDay, `Trades today ${todays.filter(s => s !== x).length} / ${maxDay}`);
+  const lostR = -todays.filter(s => s.outcome !== 'open' && s !== x).reduce((a, s) => a + (s.R || 0), 0);
+  if (S.p.dailyLossR > 0) add(lostR < S.p.dailyLossR, `Today's loss ${lostR > 0 ? lostR.toFixed(1) : 0}R (limit ${S.p.dailyLossR}R)`);
+  if (r.tpc) add(r.tpc.inSession, `Entry window: ${r.tpc.session.name} kill zone ${r.tpc.inSession ? 'open now' : 'closed now (fills only count inside it)'}`, false);
+  if (r.orb){ const h = nyClock(Date.now()).h, o = hhmm(S.p.orbOpen) ?? 9.5, e = o + (S.p.orbMin + S.p.orbWindow)/60; add(h >= o && h < e, `Entry window: ${S.p.orbOpen} open + ${S.p.orbMin + S.p.orbWindow} min ${h >= o && h < e ? 'open now' : 'closed now'}`, false); }
+  const nb = newsBlock(sym); add(!nb, nb ? `High-impact news: ${nb.cur} ${nb.title}` : 'No high-impact news nearby');
+  const b = budgetFor(sym, x);
+  if (b) add(b.minLoss <= S.p.maxLoss, b.minLoss <= S.p.maxLoss ? `Size ${b.lots.toFixed(b.step < 0.01 ? 3 : 2)} lots ≈ $${b.loss.toFixed(2)} at the stop (max $${S.p.maxLoss})` : `Even 0.01 lot loses $${b.minLoss.toFixed(2)} at the stop, over your $${S.p.maxLoss}`);
+  const tm = r.tm;
+  if (tm) add(tm.ev > -0.15, `Time Machine: ${tm.verdict}`, false);
+  const block = rows.find(z => !z.ok && z.hard);
+  return {rows, pass: !block, why: block ? block.name : (rows.find(z => !z.ok) || {}).name || ''};
 }
 
 // ---------- Take Profit Carlos: 5M trendline break → BOS → institutional push → FVG zone, entry on full FVG fill ----------
@@ -1642,7 +1793,7 @@ function statusHtml(r){
   const side = p.dir===1 ? 'Buy' : 'Sell';
   const cls = !p.htfOk ? 'neu' : p.type==='active' ? (p.dir===1?'up':'down') : p.type==='limit' ? 'warn' : 'neu';
   const txt = p.type==='active' ? `${side.toUpperCase()} active · ${p.ago} bars`
-    : p.type==='limit' ? `${side} limit ${fmt(p.entry)}${p.kind==='sr' ? ' (S/R)' : p.kind==='vp' ? ' (VP)' : p.kind==='sd' ? ' (S&D)' : p.kind==='tpc' ? ' (FVG fill)' : ''}` : p.kind==='vp' ? `VP: watch ${fmt(p.trigger)}` : `Watch break ${fmt(p.trigger)}`;
+    : p.type==='limit' ? `${side} limit ${fmt(p.entry)}${p.kind==='sr' ? ' (S/R)' : p.kind==='vp' ? ' (VP)' : p.kind==='sd' ? ' (S&D)' : p.kind==='tpc' ? ' (FVG fill)' : ''}` : p.kind==='orb' ? `ORB: watch ${fmt(p.trigger)}` : p.kind==='vp' ? `VP: watch ${fmt(p.trigger)}` : `Watch break ${fmt(p.trigger)}`;
   return `<span class="pill ${cls}">${txt}${p.htfOk ? '' : ' · vs HTF'}</span>`;
 }
 const pct = x => x==null ? '–' : Math.round(x*100) + '%';
@@ -1656,6 +1807,8 @@ function forecastHtml(r){
     ? `${st.wins} of ${st.trades} past setups hit ${S.p.tpMulti ? 'TP1' : 'TP'} (${pct(st.winRate)})${S.p.tpMulti ? `, TP2 ${pct(st.tp2)}, TP3 ${pct(st.tp3)}` : ''} · average ${st.avgR >= 0 ? '+' : ''}${st.avgR.toFixed(2)}R per trade`
     : `Only ${st.trades} finished setup${st.trades===1?'':'s'} in loaded history, too few to judge`;
   const rrLine = st.rrN ? `<div>Reached ${S.p.alertRR}R</div><div>${pct(st.rrRate)} of ${st.rrN} past setups reached ${S.p.alertRR}× risk before the stop${goodOdds(r, p) && p ? ' · <span class="good">meets your alert rule</span>' : ''}</div>` : '';
+  if (!p && r.orb) return `<div>Setup</div><div class="muted">${r.orb.note ? esc(r.orb.note) : r.orb.range ? (r.orb.range.building ? `Opening range is forming (${fmt(r.orb.range.lo)} – ${fmt(r.orb.range.hi)} so far).` : r.orb.range.done ? 'Today\'s breakout already happened. One trade a day: done for today.' : 'The breakout window has closed for today.') : `Waiting for the ${S.p.orbOpen} New York open to build today's opening range.`}</div>
+    ${newsRow()}<div>Track record</div><div>${record}</div>`;
   if (!p && r.tpc) return `${S.p.mtfOn ? `<div>Timeframes</div><div>${mtfHtml(r.mtf)}</div>` : ''}<div>Setup</div><div class="muted">No Carlos setup yet on ${tf}. ${r.tpc.inSession ? 'Kill zone is open.' : `Outside the ${r.tpc.session.name} kill zone: sit on your hands.`} Waiting for: ${(r.tpc.checklist.find(c => !c.ok) || {name:'the pull-back into the FVG'}).name.replace(/^Trades today.*/, 'tomorrow (daily trade limit reached)')}.</div>
     <div>Checklist</div><div>${tpcChecklist(r.tpc.checklist)}</div>
     <div>Track record</div><div>${record}</div>`;
@@ -1668,6 +1821,7 @@ function forecastHtml(r){
     : p.kind==='smc' && p.type==='limit' && p.poi !== 'Level' ? `Limit order at ${p.poi==='OB' ? 'order block' : 'FVG'}`
     : p.kind==='sr' ? `Limit order at ${up ? 'support' : 'resistance'}`
     : p.kind==='tpc' ? `Limit order · waiting for the FVG to fill`
+    : p.kind==='orb' ? `Opening range set · waiting for the breakout`
     : p.kind==='sd' ? `Limit order at a fresh ${up ? 'demand' : 'supply'} zone`
     : p.kind==='vp' ? (p.type === 'limit' ? `Limit order at the value area ${up ? 'high' : 'low'}` : 'Strong trend · waiting for acceptance')
     : p.type==='limit' ? 'Limit order · waiting for retest' : 'Possible · waiting for break';
@@ -1675,6 +1829,7 @@ function forecastHtml(r){
   if (p.type==='active') cond = p.hits
     ? `Signal fired ${p.ago} candles ago. TP${p.hits} hit${S.p.be ? ', stop moved to entry (break-even)' : ''}. The rest is still running.`
     : `Signal fired ${p.ago} candles ago. Neither SL nor TP has been hit yet.`;
+  else if (p.kind==='orb') cond = `Today's ${S.p.orbMin}-minute opening range from ${S.p.orbOpen} New York: ${fmt(p.range.lo)} – ${fmt(p.range.hi)}. ${up ? 'Buy' : 'Sell'} on the first ${tf} close ${up ? 'above' : 'below'} ${fmt(p.trigger)} (or the opposite side if price breaks that way first) before ${(() => { const e = (hhmm(S.p.orbOpen) ?? 9.5) + (S.p.orbMin + S.p.orbWindow)/60; return String(Math.floor(e)).padStart(2, '0') + ':' + String(Math.round(e % 1 * 60)).padStart(2, '0'); })()} New York. Stop at the range ${S.p.orbStop === 'far' ? 'far side' : 'midpoint'} ${fmt(p.sl)}, target 1:${S.p.orbRR}, flat by ${S.p.orbFlat} either way.`;
   else if (p.kind==='tpc') cond = `Trendline broken, structure broke at ${fmt(p.zone.level)} and an institutional push (${p.zone.push}) left a fair value gap. ${up ? 'Demand' : 'Supply'} zone ${fmt(Math.min(p.zone.fvgNear, p.zone.swing))} – ${fmt(Math.max(p.zone.fvgNear, p.zone.swing))}. Let the early ${up ? 'buyers' : 'sellers'} lose: ${up ? 'buy' : 'sell'} only when price comes back and <b>completely fills the FVG</b> at ${fmt(p.entry)}, inside the kill zone. Stop just ${up ? 'below the swing low' : 'above the swing high'} ${fmt(p.sl)}. Dead if a candle closes ${up ? 'below' : 'above'} ${fmt(p.invalid)} or after ${p.expiresIn} more candles.`;
   else if (p.kind==='sd') cond = `Fresh ${up ? 'demand' : 'supply'} zone ${fmt(Math.min(p.zprox, p.zdist))} – ${fmt(Math.max(p.zprox, p.zdist))}: price left it with a strong move (${p.strength.toFixed(1)}× ATR) and ${p.visits ? 'has returned ' + p.visits + '× since' : 'has not been back yet'}. ${up ? 'Buy' : 'Sell'} the first return when a ${up ? 'bullish' : 'bearish'} candle closes back ${up ? 'above' : 'below'} ${fmt(p.entry)}. The zone is dead if a candle closes ${up ? 'below' : 'above'} ${fmt(p.invalid)}.`;
   else if (p.kind==='vp') cond = p.type === 'limit'
@@ -1719,16 +1874,37 @@ function forecastHtml(r){
     ${p.gates && p.gates.length ? `<div>Filters</div><div style="display:grid;gap:2px">${p.gates.map(g =>
       `<div>${g.ok === null ? '◻' : g.ok ? '<span class="good">✓</span>' : '<span class="bad">✗</span>'} ${esc(g.name)}</div>`).join('')}</div>` : ''}
     ${newsRow()}
+    ${tmRow(r)}
     <div>Track record</div><div>${record}</div>
     ${rrLine}
+    ${budgetRow(curSymbol(), p)}
+    ${riskRow(r, p)}
     ${S.p.mtfOn ? `<div>Timeframes</div><div>${mtfHtml(r.mtf)}${r.mtf && r.mtf.aligned && p ? (r.mtf.aligned === p.dir ? ' · <span class="good">all agree with this trade</span>' : ' · <span class="bad">all against this trade</span>') : ''}</div>` : ''}`;
+}
+function tmRow(r){
+  const tm = tmOf(r); if (!tm) return '';
+  const bar = (v, c) => `<span style="display:inline-block;height:8px;width:${Math.round(v*100)}%;background:${c}"></span>`;
+  return `<div>Time Machine</div><div><div style="display:flex;width:100%;max-width:240px;border-radius:4px;overflow:hidden;margin:3px 0">${bar(tm.tgt, 'var(--up)')}${bar(tm.open, '#64748b')}${bar(tm.stop, 'var(--down)')}</div>
+    TP2 first <b class="good">${pct(tm.tgt)}</b> · stop first <b class="bad">${pct(tm.stop)}</b> · still open <b>${pct(tm.open)}</b> · TP1 touched ${pct(tm.tp1)}
+    <div class="muted" style="font-size:12px">${tm.runs.toLocaleString()} replays of the next ${tm.bars} candles from entry, built from this market's own candles at the same time of day (seed ${tm.seed}). Verdict: <b>${tm.verdict}</b> (${tm.ev >= 0 ? '+' : ''}${tm.ev.toFixed(2)}R per trade).</div></div>`;
+}
+function budgetRow(sym, x){
+  const b = budgetFor(sym, x); if (!b) return '';
+  const dp = b.step < 0.01 ? 3 : 2;
+  return `<div>Position size</div><div>${b.lots >= b.step ? `<b>${b.lots.toFixed(dp)} lots</b> → about <b>$${b.loss.toFixed(2)}</b> lost at the stop` : `<span class="bad">Too small: 0.01 lot already risks $${b.minLoss.toFixed(2)}</span>`}
+    <div class="muted" style="font-size:12px">Max loss $${S.p.maxLoss}${b.pctAcct ? ` (${(b.pctAcct*100).toFixed(1)}% of $${S.p.acct})` : ''} · ${esc(b.cv.how)} · approximate, check the size in MT5</div></div>`;
+}
+function riskRow(r, x){
+  const rc = riskCheck(r, x, curSymbol()); if (!rc) return '';
+  return `<div>Risk check</div><div><span class="pill ${rc.pass ? 'up' : 'down'}">${rc.pass ? 'PASS' : 'BLOCK'}</span>${rc.pass ? '' : ` <span class="bad">${esc(rc.why)}</span>`}
+    <div style="display:grid;gap:2px;margin-top:4px">${rc.rows.map(z => `<div>${z.ok ? '<span class="good">✓</span>' : z.hard ? '<span class="bad">✗</span>' : '<span style="color:#f59e0b">!</span>'} ${esc(z.name)}</div>`).join('')}</div></div>`;
 }
 function newsRow(){
   if (!S.p.news) return '';
   const nx = nextNews(curSymbol()), blocked = newsBlock(curSymbol());
   const when = e => new Date(e.t).toLocaleString([], {weekday:'short', hour:'2-digit', minute:'2-digit'});
   return `<div>News</div><div>${blocked ? `<span class="bad">✗ ${esc(blocked.cur)} ${esc(blocked.title)} (${when(blocked)}): no new trades</span>`
-    : nx ? `<span class="good">✓</span> next: ${esc(nx.cur)} ${esc(nx.title)}, ${when(nx)}` : `<span class="muted">${esc(NEWS.status)}</span>`}</div>`;
+    : nx ? `<span class="good">✓</span> next: ${esc(nx.cur)} ${esc(nx.title)}, ${when(nx)}` : `<span class="muted">${esc(NEWS.status)}</span>`}${newsToday(curSymbol())}</div>`;
 }
 const esc = s => String(s).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 
@@ -1931,6 +2107,11 @@ function draw(cs, r){
     ${r.vp && S.p.vpShow ? `<span class="chip mtfchip" title="${r.vp.mode === 'volume' ? 'Built from traded volume' : 'This market has no volume data: time spent at each price'}">VP · ${r.vp.mode === 'volume' ? 'volume' : 'time'} · ADX ${Math.round(r.vp.adx)}</span>` : ''}`;
 
   const markers = [];
+  // opening range: today's box and the breakout level
+  if (r.orb && r.orb.range){ const g = r.orb.range;
+    rects.push({l0:g.from, l1:END, p0:g.lo, p1:g.hi, cls:'fvg lab-left', label:`Opening range ${S.p.orbMin}m${g.building ? ' (forming)' : ''}`}); }
+  if (r.orb) for (const s of r.signals.slice(-3)) if (s.range && (!r.orb.range || s.range.from !== r.orb.range.from))
+    rects.push({l0:s.range.from, l1:s.i, p0:s.range.lo, p1:s.range.hi, cls:'fvg', label:''});
   // Take Profit Carlos: the 3-touch trendline, the BOS level, the FVG and the zone
   if (r.tpc){
     const t = r.tpc;
@@ -1975,7 +2156,7 @@ function draw(cs, r){
     }
   }
   for (const s of r.signals.slice(annot ? 0 : -4)) markers.push({time:s.t/1000, position:s.dir===1?'belowBar':'aboveBar', color:s.dir===1?'#22c55e':'#ef4444',
-    shape:s.dir===1?'arrowUp':'arrowDown', text:(s.kind==='SMC' ? '' : s.kind==='SMC CHoCH' ? 'CHoCH ' : s.kind==='VP retest' ? 'VP ' : s.kind==='S&D' ? 'S&D ' : s.kind==='TPC' ? '' : 'S/R ') + (s.dir===1?'BUY':'SELL')});
+    shape:s.dir===1?'arrowUp':'arrowDown', text:(s.kind==='SMC' ? '' : s.kind==='SMC CHoCH' ? 'CHoCH ' : s.kind==='VP retest' ? 'VP ' : s.kind==='S&D' ? 'S&D ' : s.kind==='TPC' ? '' : s.kind==='ORB' ? 'ORB ' : 'S/R ') + (s.dir===1?'BUY':'SELL')});
   markers.sort((a,b) => a.time-b.time);
 
   // fresh supply / demand zones: nearest 2 on each side
@@ -2272,7 +2453,7 @@ async function runBacktest(){
       ${tile('Buys won', st.longs.n ? `${st.longs.w}/${st.longs.n}` : '–')}
       ${tile('Sells won', st.shorts.n ? `${st.shorts.w}/${st.shorts.n}` : '–')}
       ${tile('Avg time in trade', st.avgBars.toFixed(0) + ' candles')}
-      ${['SMC','SMC CHoCH','S/R bounce','S/R flip','VP retest','S&D'].map(k => { const x = all.filter(t => t.kind === k); if (!x.length || p.strategy === 'smc' || p.strategy === 'tpc') return '';
+      ${['SMC','SMC CHoCH','S/R bounce','S/R flip','VP retest','S&D'].map(k => { const x = all.filter(t => t.kind === k); if (!x.length || p.strategy === 'smc' || p.strategy === 'tpc' || p.strategy === 'orb') return '';
         const net = x.reduce((a,t) => a + t.R, 0); return tile(`${k}: won ${x.filter(t => t.outcome==='win').length}/${x.length}`, sgn(net) + 'R', net >= 0 ? 'good' : 'bad'); }).join('')}
     </div>
     <p class="muted" style="margin:0">${p.tpMulti ? `Exits: ${p.split} at TP1 (${p.tp1R}R) / TP2 (strategy target) / TP3 (${p.tp3Mode === 'liq' ? 'next liquidity, else ' + p.tp3R + 'R' : p.tp3R + 'R'})${p.be ? ', stop to break-even after TP1' : ''}. A trade counts as a win once TP1 is hit.` : p.strategy==='sr' && p.tpMode==='zone' ? 'Targets are the next S/R level, so reward varies per trade.' : `At 1:${p.rr} R:R with ${cost}R costs you need a win rate above ${pct(be)} to make money.`}
@@ -2335,7 +2516,7 @@ async function runBacktest(){
 
 // ======================= UI wiring =======================
 const curSymbol = () => S.symbol[S.source] || '';
-const STRAT = {tpc:'Take Profit Carlos', smc:'SMC BOS + retest', sr:'Support & Resistance', vp:'Volume profile', sd:'Supply & Demand', both:'SMC + S/R', all:'All strategies'};
+const STRAT = {tpc:'Take Profit Carlos', orb:'Opening-range breakout', smc:'SMC BOS + retest', sr:'Support & Resistance', vp:'Volume profile', sd:'Supply & Demand', both:'SMC + S/R', all:'All strategies'};
 function setStatus(t){ $('status').textContent = t; }
 function toast(msg){
   const box = $('toast'), d = document.createElement('div'); d.textContent = msg; d.setAttribute('role', 'status');
@@ -2481,6 +2662,7 @@ function checkNew(source, sym, tf, r){
   const key = [source, sym, tf].join('|');
   const t = r.last ? r.last.t : 0;
   const good = goodOdds(r, r.last), goodPlan = goodOdds(r, r.plan);
+  if (r.last) r.last._rc = riskCheck(r, r.last, sym);
   if (key in seen && t > seen[key] && r.lastAgo <= 1 && good){
     const msg = `${sym} ${tf}: ${r.last.dir===1?'BUY':'SELL'} @ ${fmt(r.last.entry)} · SL ${fmt(r.last.sl)} · ${S.p.tpMulti ? tpList(r.last.tps) : 'TP ' + fmt(r.last.tp)} · ${oddsText(r)}`;
     toast(msg); beep();
@@ -2667,7 +2849,7 @@ const F = [['s_sdbase','sdBase',Number],['s_sddep','sdDep',Number],['s_sdmove','
   ['s_corr','corr',v=>v==='1'],['s_maxopenbt','maxOpenBt',Number],['s_dayloss','dailyLossR',Number],
   ['s_tpmulti','tpMulti',v=>v==='1'],['s_tp1r','tp1R',Number],['s_tp3mode','tp3Mode',String],['s_tp3r','tp3R',Number],
   ['s_split','split',String],['s_be','be',v=>v==='1'],['s_annot','view',String],['s_poi','poi',String],['s_choch','choch',v=>v==='1'],['s_disp','dispAtr',Number],['s_session','session',String],['s_minconf','minConf',Number],
-  ['s_strategy','strategy',String],['c_session','cSession',String],['c_ema','cEma',Number],['c_chop','cChop',Number],['c_touch','cTouches',Number],['c_swing','cSwing',Number],['c_push','cPush',Number],['c_disp','cDisp',Number],['c_window','cWindow',Number],['c_valid','cValid',Number],['c_maxday','cMaxDay',Number],['c_slbuf','cSlBuf',Number],['s_srtouch','srTouches',Number],['s_zonew','zoneW',Number],['s_srlook','srLook',Number],
+  ['s_strategy','strategy',String],['o_open','orbOpen',String],['o_min','orbMin',Number],['o_win','orbWindow',Number],['o_stop','orbStop',String],['o_rr','orbRR',Number],['o_flat','orbFlat',String],['g_maxloss','maxLoss',Number],['g_acct','acct',Number],['g_minrr','minTradeRR',Number],['g_dayloss','dailyLossR',Number],['g_lotmap','lotMap',String],['g_tm','tmOn',v=>v==='1'],['g_tmruns','tmRuns',Number],['g_tmbars','tmBars',Number],['c_session','cSession',String],['c_ema','cEma',Number],['c_chop','cChop',Number],['c_touch','cTouches',Number],['c_swing','cSwing',Number],['c_push','cPush',Number],['c_disp','cDisp',Number],['c_window','cWindow',Number],['c_valid','cValid',Number],['c_maxday','cMaxDay',Number],['c_slbuf','cSlBuf',Number],['s_srtouch','srTouches',Number],['s_zonew','zoneW',Number],['s_srlook','srLook',Number],
   ['s_srtrend','srTrend',String],['s_tpmode','tpMode',String],['s_minrr','minRR',Number],['s_swing','swing',Number],['s_trend','trend',String],['s_ema','ema',Number],['s_htfema','htfEma',Number],
   ['s_usehtf','useHtf',v=>v==='1'],['s_tol','tol',Number],['s_maxr','maxRetest',Number],['s_rej','rej',v=>v==='1'],
   ['s_sl','slAtr',Number],['s_rr','rr',Number],['s_fresh','fresh',Number],['s_closed','closed',v=>v==='1']];
@@ -2781,12 +2963,18 @@ function toggleWatch(){
   if (LAST_DRAW) $('fc').innerHTML = forecastHtml(LAST_DRAW.r);
 }
 function renderWatched(){
-  const list = S.watched || [], live = list.filter(w => w.status === 'waiting' || w.status === 'at entry');
-  $('wsCount').textContent = live.length ? `${live.length} active` : '';
+  const list = S.watched || [], live = list.filter(w => ['waiting', 'at entry', 'triggered'].includes(w.status));
+  const pa = (S.palerts || []);
+  $('wsCount').textContent = live.length + pa.filter(a => !a.done).length ? `${live.length + pa.filter(a => !a.done).length} active` : '';
+  const paHtml = pa.slice().reverse().map(a => `<div class="ws"><div class="open"><b>${a.dir === 1 ? '▲' : '▼'} ${esc(a.sym)}</b> <span class="muted">price ${a.dir === 1 ? 'rises to' : 'falls to'} ${fmt(a.price)}</span> ${a.done ? '<span class="pill warn">Hit ✓</span>' : '<span class="pill neu">Waiting</span>'}</div>
+      <button type="button" data-unalert="${a.id}" aria-label="Remove">✕</button>
+      <div class="sub">${a.last ? `now ${fmt(a.last)} (${(Math.abs(a.last - a.price)/a.price*100).toFixed(2)}% away)` : 'checking…'}</div></div>`).join('');
+  if (!list.length && paHtml){ $('wsList').innerHTML = paHtml; return; }
   if (!list.length){ $('wsList').innerHTML = '<p class="muted" style="margin:0;padding:12px;font-size:13px">Tap 🔔 on a setup in the Forecast to get notified the moment it reaches its entry and when it triggers.</p>'; return; }
-  const pill = w => w.status === 'triggered' ? `<span class="pill ${w.dir === 1 ? 'up' : 'down'}">Triggered ✓</span>`
+  const pill = w => w.status === 'triggered' ? `<span class="pill ${w.dir === 1 ? 'up' : 'down'}">In trade${w.hit ? ' · TP' + w.hit + ' ✓' : ''}</span>`
+    : w.status === 'closed' ? `<span class="pill ${w.result === 'stop' ? 'down' : 'up'}">${w.result === 'stop' ? 'Stopped' : w.result === 'flat' ? 'Flat' : 'Closed ✓'}</span>`
     : w.status === 'at entry' ? '<span class="pill warn">At entry</span>' : w.status === 'cancelled' ? '<span class="pill neu">Cancelled</span>' : '<span class="pill neu">Waiting</span>';
-  $('wsList').innerHTML = list.slice().reverse().map(w => {
+  $('wsList').innerHTML = paHtml + list.slice().reverse().map(w => {
     const dist = w.price ? ` · now ${fmt(w.price)} (${(Math.abs(w.price - w.entry)/w.entry*100).toFixed(2)}% away)` : '';
     return `<div class="ws"><div class="open" data-open="${esc(w.key)}"><b>${w.dir === 1 ? '▲ BUY' : '▼ SELL'} ${esc(w.sym)}</b> <span class="muted">${w.tf.toUpperCase()}</span> ${pill(w)}</div>
       <button type="button" data-unwatch="${esc(w.key)}|${w.created}" aria-label="Remove">✕</button>
@@ -2812,6 +3000,30 @@ let watchBusy = false;
 async function watchTick(){
   if (watchBusy) return; watchBusy = true;
   try {
+    // price alerts
+    for (const a of (S.palerts || [])){
+      if (a.done || Date.now() - (a.at || 0) < (a.source === 'twelvedata' ? 60000 : WATCH_TICK - 500)) continue;
+      try { const px = await livePrice({source:a.source, sym:a.sym, tf:'5m'}); a.at = Date.now();
+        if (px){ a.last = px; if (a.dir === 1 ? px >= a.price : px <= a.price){ a.done = true;
+          watchAlert({}, `🔔 ${a.sym} ${a.dir === 1 ? 'up to' : 'down to'} ${fmt(a.price)}`, `${a.sym}: price is ${fmt(px)}, your alert at ${fmt(a.price)} was hit.`); } } } catch(e){}
+    }
+    // trades the app saw trigger: ring on each TP, the stop, and flat-by-the-close
+    for (const w of (S.watched || [])){
+      if (w.status !== 'triggered' || !w.tps) continue;
+      const now = Date.now();
+      if (now - w.priceAt < (w.source === 'twelvedata' ? 60000 : WATCH_TICK - 500)) continue;
+      try {
+        const px = await livePrice(w); w.priceAt = now; if (!px) continue; w.price = px;
+        const d = w.dir, stop = w.hit && S.p.be ? w.entry : w.sl;
+        if (d === 1 ? px <= stop : px >= stop){ w.status = 'closed'; w.result = w.hit ? 'be' : 'stop';
+          watchAlert(w, `${w.hit ? '⚪' : '⛔'} ${w.sym} ${w.hit ? 'out at break-even' : 'STOPPED OUT'}`, `${w.sym} ${w.tf}: price ${fmt(px)} hit the ${w.hit ? 'break-even stop' : 'stop'} ${fmt(stop)}.`); continue; }
+        while (w.hit < w.tps.length && (d === 1 ? px >= w.tps[w.hit] : px <= w.tps[w.hit])){ w.hit++;
+          watchAlert(w, `🎯 ${w.sym} TP${w.hit} hit`, `${w.sym} ${w.tf}: TP${w.hit} ${fmt(w.tps[w.hit-1])} reached (price ${fmt(px)}).${w.hit === 1 && S.p.be ? ' Move the stop to entry.' : ''}`); }
+        if (w.hit >= w.tps.length){ w.status = 'closed'; w.result = 'tp'; continue; }
+        if (w.flatT && now >= w.flatT){ w.status = 'closed'; w.result = 'flat';
+          watchAlert(w, `⏰ ${w.sym}: flat by the close`, `${w.sym}: it is ${S.p.orbFlat} New York. Close the trade (price ${fmt(px)}).`); }
+      } catch(e){}
+    }
     for (const w of (S.watched || [])){
       if (w.status !== 'waiting' && w.status !== 'at entry') continue;
       const now = Date.now();
@@ -2841,7 +3053,7 @@ async function watchTick(){
           const {r} = await loadAndAnalyze(w.source, w.sym, w.tf, w.htf, Math.max(1000, S.p.ema*3), true);
           const sig = r.signals.slice().reverse().find(x => x.dir === w.dir && x.t + tfMs >= w.created);
           if (sig){
-            w.status = 'triggered'; w.entry = sig.entry; w.sl = sig.sl; w.tps = sig.tps || [sig.tp];
+            w.status = 'triggered'; w.entry = sig.entry; w.sl = sig.sl; w.tps = sig.tps || [sig.tp]; w.hit = 0; w.flatT = sig.flatT || null; w.priceAt = 0;
             const msg = `${w.sym} ${w.tf}: ${w.dir === 1 ? 'BUY' : 'SELL'} @ ${fmt(sig.entry)} · SL ${fmt(sig.sl)} · ${S.p.tpMulti ? tpList(sig.tps) : 'TP ' + fmt(sig.tp)}`;
             watchAlert(w, `${w.dir === 1 ? '🟢 BUY' : '🔴 SELL'} TRIGGERED · ${w.sym} ${w.tf.toUpperCase()}`, msg);
             if (S.broker.auto && BROKER.conn && w.source === S.source && !newsBlock(w.sym)) brokerExecute(w.sym, sig, false);
@@ -2856,7 +3068,18 @@ async function watchTick(){
   } finally { watchBusy = false; }
 }
 setInterval(watchTick, WATCH_TICK);
+$('pa_add').onclick = () => {
+  const v = parseFloat(String($('pa_price').value).replace(',', '.')), sym = curSymbol();
+  if (!(v > 0) || !sym){ toast('Type a price first.'); return; }
+  const px = LAST_DRAW && LAST_DRAW.cs.length ? LAST_DRAW.cs[LAST_DRAW.cs.length - 1].c : v;
+  (S.palerts = S.palerts || []).push({id: Date.now(), source:S.source, sym, price:v, dir: v >= px ? 1 : -1, created:Date.now(), done:false, last:px, at:0});
+  $('pa_price').value = ''; save(); renderWatched();
+  toast(`Alert set: ${sym} ${v >= px ? 'rises to' : 'falls to'} ${fmt(v)}.`);
+  if ('Notification' in window && Notification.permission === 'default') enableNotifications();
+};
 $('wsList').addEventListener('click', e => {
+  const ua = e.target.closest('[data-unalert]');
+  if (ua){ S.palerts = (S.palerts || []).filter(a => String(a.id) !== ua.dataset.unalert); save(); renderWatched(); return; }
   const x = e.target.closest('[data-unwatch]');
   if (x){ const [k, t] = [x.dataset.unwatch.slice(0, x.dataset.unwatch.lastIndexOf('|')), +x.dataset.unwatch.split('|').pop()];
     S.watched = S.watched.filter(w => !(w.key === k && w.created === t)); save(); renderWatched();
@@ -2893,12 +3116,12 @@ function shareButtons(what){
 }
 // Normalised trade description from a forecast plan or from a fired signal
 function fromPlan(p){
-  return {dir:p.dir, entry:p.entry, sl:p.sl, tps:p.tps || [p.tp], kind: p.kind === 'tpc' ? 'Take Profit Carlos · FVG fill' : p.kind === 'sr' ? 'Support & resistance' : p.kind === 'vp' ? 'Volume profile retest' : p.kind === 'sd' ? 'Supply & demand zone' : p.choch ? 'SMC CHoCH' : 'SMC BOS + retest',
+  return {dir:p.dir, entry:p.entry, sl:p.sl, tps:p.tps || [p.tp], kind: p.kind === 'tpc' ? 'Take Profit Carlos · FVG fill' : p.kind === 'orb' ? 'Opening-range breakout' : p.kind === 'sr' ? 'Support & resistance' : p.kind === 'vp' ? 'Volume profile retest' : p.kind === 'sd' ? 'Supply & demand zone' : p.choch ? 'SMC CHoCH' : 'SMC BOS + retest',
     state: p.type === 'active' ? 'Running' : p.type === 'limit' ? 'Limit order (wait for the retest)' : 'Pending: only if structure breaks',
     trigger: p.trigger, gates: p.gates, trail: p.tps && p.tps.trail, hits: p.hits || 0};
 }
 function fromSignal(s){
-  return {dir:s.dir, entry:s.entry, sl:s.sl, tps:s.tps || [s.tp], kind: s.kind === 'SMC' ? 'SMC BOS + retest' : s.kind === 'TPC' ? 'Take Profit Carlos · FVG fill' : s.kind,
+  return {dir:s.dir, entry:s.entry, sl:s.sl, tps:s.tps || [s.tp], kind: s.kind === 'SMC' ? 'SMC BOS + retest' : s.kind === 'TPC' ? 'Take Profit Carlos · FVG fill' : s.kind === 'ORB' ? 'Opening-range breakout' : s.kind,
     state:'Market entry', conf:s.conf, score:s.score, t:s.t, trail: s.tps && s.tps.trail, hits: s.hits || 0};
 }
 function signalLines(sym, tf, x){
@@ -2916,6 +3139,11 @@ function signalLines(sym, tf, x){
   L.push(`Risk : reward 1 : ${(Math.abs(far - x.entry)/risk).toFixed(1)}`);
   if (S.p.tpMulti) L.push(`Plan: close ${S.p.split} at TP1/TP2/TP3${S.p.be ? ', stop to entry after TP1' : ''}`);
   if (x.conf){ const c = CONF_KEYS.filter(k => x.conf[k]).map(k => CONF_LABEL[k]); if (c.length) L.push(`Confluence: ${c.join(', ')} (${x.score}/6)`); }
+  const lastR = LAST_DRAW && curSymbol() === sym ? LAST_DRAW.r : null;
+  if (lastR && lastR.tm) L.push(`Time Machine: TP2 first ${pct(lastR.tm.tgt)} · stop first ${pct(lastR.tm.stop)} · open ${pct(lastR.tm.open)} (${lastR.tm.verdict})`);
+  const check = lastR ? riskCheck(lastR, x, sym) : null;
+  if (check) L.push(`Risk check: ${check.pass ? 'PASS ✅' : 'BLOCK ⛔ ' + check.why}`);
+  const bg = budgetFor(sym, x); if (bg && bg.lots >= bg.step) L.push(`Size for $${S.p.maxLoss} max loss: ~${bg.lots.toFixed(bg.step < 0.01 ? 3 : 2)} lots`);
   if (SHARE.stats && SHARE.stats.trades >= 3 && SHARE.sym === sym) L.push(`Track record here: ${pct(SHARE.stats.winRate)} reached TP1 (${SHARE.stats.trades} setups)`);
   L.push('', `🕒 ${new Date(x.t || Date.now()).toLocaleString('en-GB', {timeZone:'UTC', day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'})} UTC`);
   const mt = S.p.mtfOn ? mtfCached(S.source, sym) : null;
@@ -3009,6 +3237,12 @@ function newsBlock(sym, t = Date.now()){
   if (!S.p.news || !NEWS.events.length) return null;
   const cur = legs(sym);
   return NEWS.events.find(e => cur.includes(e.cur) && t >= e.t - S.p.newsBefore*60e3 && t <= e.t + S.p.newsAfter*60e3) || null;
+}
+function newsToday(sym){
+  const cur = legs(sym), d0 = new Date(); d0.setHours(0, 0, 0, 0); const d1 = +d0 + 86400e3;
+  const list = NEWS.events.filter(e => cur.includes(e.cur) && e.t >= +d0 && e.t < d1).sort((a, b) => a.t - b.t);
+  if (!list.length) return '';
+  return `<div class="muted" style="font-size:12px;margin-top:3px">Today: ${list.map(e => `${new Date(e.t).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} ${esc(e.cur)} ${esc(e.title)}${e.t < Date.now() ? ' ✓' : ''}`).join(' · ')}</div>`;
 }
 function nextNews(sym){
   const cur = legs(sym), now = Date.now();
@@ -3141,6 +3375,7 @@ async function brokerExecute(sym, sig, manual){
       const clash = mine.find(p => sharesRisk({sym:strip(p.symbol), dir:/BUY/.test(p.type) ? 1 : -1}, {sym, dir:sig.dir}));
       if (clash) return say(`skipped, correlated with the open ${clash.symbol} trade`);
     }
+    if (!manual && sig._rc && !sig._rc.pass) return say(`skipped by the risk check: ${sig._rc.why}`);
     const nb = newsBlock(sym);
     if (nb) return say(`skipped, high-impact ${nb.cur} news "${nb.title}" at ${new Date(nb.t).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`);
     const [price, spec] = await Promise.all([conn.getSymbolPrice(bs), conn.getSymbolSpecification(bs)]);
@@ -3148,9 +3383,9 @@ async function brokerExecute(sym, sig, manual){
     const tps = S.p.tpMulti ? sig.tps : [sig.tp, sig.tp, sig.tp];
     if (d === 1 ? (entry <= sig.sl || entry >= tps[0]) : (entry >= sig.sl || entry <= tps[0])) return say('skipped, price is already past the stop or TP1', true);
     const tick = spec.tickSize, perLot = Math.abs(entry - sig.sl)/tick * price.lossTickValue;
-    const riskMoney = info.balance * S.broker.risk / 100;
+    const usd = S.broker.riskMode === 'usd', riskMoney = usd ? S.broker.riskUsd : info.balance * S.broker.risk / 100;
     let vol = Math.min(floorStep(riskMoney/perLot, spec.volumeStep), spec.maxVolume);
-    if (!(vol >= spec.minVolume)) return say(`skipped, ${S.broker.risk}% risk is below the minimum lot (${spec.minVolume})`, true);
+    if (!(vol >= spec.minVolume)) return say(`skipped, ${usd ? '$' + S.broker.riskUsd : S.broker.risk + '%'} risk is below the minimum lot (${spec.minVolume} lot loses ${(spec.minVolume*perLot).toFixed(2)} at the stop)`, true);
     const sl = roundTick(sig.sl, tick), T = tps.map(v => roundTick(v, tick));
     const order = (v, tp, cm) => d === 1
       ? conn.createMarketBuyOrder(bs, +v.toFixed(8), sl, tp, {comment:cm, magic:S.broker.magic})
@@ -3236,7 +3471,7 @@ $('bPos').onclick = async e => {
 
 function brokerForm(){
   $('b_token').value = S.broker.token; $('b_remember').value = S.broker.remember ? '1' : '0';
-  $('b_auto').value = S.broker.auto ? '1' : '0'; $('b_risk').value = S.broker.risk; $('b_max').value = S.broker.maxOpen; $('b_dayloss').value = S.broker.dayLossPct;
+  $('b_auto').value = S.broker.auto ? '1' : '0'; $('b_risk').value = S.broker.risk; $('b_riskmode').value = S.broker.riskMode || 'pct'; $('b_riskusd').value = S.broker.riskUsd || 50; $('b_max').value = S.broker.maxOpen; $('b_dayloss').value = S.broker.dayLossPct;
   $('b_suffix').value = S.broker.suffix; $('b_map').value = S.broker.map;
   if (S.broker.accountId && ![...$('b_account').options].some(o => o.value === S.broker.accountId))
     $('b_account').insertAdjacentHTML('beforeend', `<option value="${esc(S.broker.accountId)}">Saved account ${esc(S.broker.accountId.slice(0, 8))}…</option>`);
@@ -3244,7 +3479,7 @@ function brokerForm(){
 }
 function brokerSaveForm(){
   S.broker.token = $('b_token').value.trim(); S.broker.remember = $('b_remember').value === '1';
-  S.broker.auto = $('b_auto').value === '1'; S.broker.risk = Math.max(0.05, +$('b_risk').value || 0.5);
+  S.broker.auto = $('b_auto').value === '1'; S.broker.risk = Math.max(0.05, +$('b_risk').value || 0.5); S.broker.riskMode = $('b_riskmode').value; S.broker.riskUsd = Math.max(1, +$('b_riskusd').value || 50);
   S.broker.maxOpen = Math.max(1, +$('b_max').value || 1); S.broker.dayLossPct = Math.max(0, +$('b_dayloss').value || 0); S.broker.suffix = $('b_suffix').value.trim(); S.broker.map = $('b_map').value;
   S.broker.accountId = $('b_account').value || S.broker.accountId;
   if (BROKER.api && BROKER.tokenUsed !== S.broker.token) BROKER.api = null;
